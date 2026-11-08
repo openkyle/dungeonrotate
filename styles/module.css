@@ -1,0 +1,16 @@
+.rotating-dungeon fieldset {border:1px solid #8888;border-radius:6px;margin:12px 0;padding:10px;}
+.rotating-dungeon legend {font-weight:bold;padding:0 6px;}
+.rotating-dungeon .checks,.rotating-dungeon .actions {display:flex;gap:7px;flex-wrap:wrap;margin:8px 0;}
+.rotating-dungeon .checks label {display:flex;align-items:center;gap:3px;}
+.rotating-dungeon .actions button {flex:1;min-width:80px;}
+.rotating-dungeon .form-fields select {min-width:0;}
+.rotating-dungeon .notes {font-size:12px;line-height:1.4;opacity:.85;}
+.rotating-dungeon .error {color:#a00;font-weight:bold;}
+.rotating-dungeon footer {margin-top:12px;}
+
+.rotating-dungeon .window-content {max-height:80vh;overflow-y:auto;}
+.rotating-elements-floating .scene-title {margin:0 0 8px;font-weight:bold;}
+.rotating-elements-floating .rotation-slot {border-top:1px solid #8886;padding:9px 0 3px;}
+.rotating-elements-floating .slot-heading {display:flex;gap:8px;align-items:center;font-size:12px;}
+.rotating-elements-floating .image-name {flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rotating-elements-floating .slot-speed {font-size:12px;opacity:.8;margin:5px 0;}

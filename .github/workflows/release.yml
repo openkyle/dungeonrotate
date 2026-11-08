@@ -1,0 +1,31 @@
+name: Publish manually approved release
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: npm run check && npm test
+      - name: Build release assets
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: python3 tools/package.py --repository "$REPOSITORY"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          VERSION=$(node -p 'JSON.parse(require("fs").readFileSync("module.json", "utf8")).version')
+          EXTRA=()
+          if [[ "$VERSION" == *-* ]]; then EXTRA+=(--prerelease); fi
+          gh release create "v$VERSION" dist/module.json dist/rotating-dungeon.zip --target "$RELEASE_COMMIT" --title "Rotating Dungeon $VERSION" --notes-file CHANGELOG.md "${EXTRA[@]}"

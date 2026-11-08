@@ -1,0 +1,11 @@
+{
+  "name": "rotating-dungeon",
+  "version": "0.1.0-rc.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check scripts/main.js && node --check scripts/controller.js && node --check scripts/panel.js && node --check scripts/core.js && node --check scripts/mask.js && node --check scripts/floating.js",
+    "package": "python3 tools/package.py"
+  }
+}
