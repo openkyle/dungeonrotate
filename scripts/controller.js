@@ -5,6 +5,7 @@ const point = a => ({x: a[0], y: a[1]});
 
 export class RotationController {
   constructor() {
+    this.requestAuthors = new Map();
     this.queue = Promise.resolve(); this.last = 0; this.owner = null; this.timer = null;
     this.readMask = readMask; this.readFloor = readFloor;
     this.failure = false; this.lastError = ""; this.stopped = true;
@@ -57,6 +58,10 @@ export class RotationController {
     return slot ?? (flags.attachment ? undefined : this.pick(scene, state, center, new Map(), carryKey));
   }
   center(token, scene) { return [token.x + token.width * scene.grid.size / 2, token.y + token.height * scene.grid.size / 2]; }
+  observeTokenRequest(token, change, userId) {
+    const request = change[`flags.${ID}.request`] ?? change.flags?.[ID]?.request;
+    if (request?.id) this.requestAuthors.set(`${token.parent.id}:${token.id}`, {id:request.id,userId});
+  }
   intercept(token, change, options) {
     if (options[ID] || (!Object.hasOwn(change, "x") && !Object.hasOwn(change, "y"))) return;
     const scene = token.parent;
@@ -139,9 +144,11 @@ export class RotationController {
           && (!game.paused || requester.isGM);
         if (valid) {
           const target = toWorld(request.local, tile, angle);
-          const inSolid = slots.some(s => s.collision && s.mask && solidAt(s.mask, toLocal(target, scene.tiles.get(s.tileId), angles.get(s.id)), scene.tiles.get(s.tileId)));
+          const author = this.requestAuthors.get(`${scene.id}:${token.id}`);
+          const gmMove = requester.isGM && author?.id === request.id && author.userId === requester.id;
+          const inSolid = !gmMove && slots.some(s => s.collision && s.mask && solidAt(s.mask, toLocal(target, scene.tiles.get(s.tileId), angles.get(s.id)), scene.tiles.get(s.tileId)));
           // Native movement collision tests include static scene walls and both rotating wall sets.
-          const blocked = !token.object || token.object.checkCollision(point(target), {origin: point(destination), type: "move", mode: "any"});
+          const blocked = !gmMove && (!token.object || token.object.checkCollision(point(target), {origin: point(destination), type: "move", mode: "any"}));
           const bounds = scene.dimensions;
           const insideScene = target[0] >= bounds.sceneX && target[1] >= bounds.sceneY && target[0] < bounds.sceneX + bounds.sceneWidth && target[1] < bounds.sceneY + bounds.sceneHeight;
           if (!inSolid && !blocked && insideScene) {

@@ -1,3 +1,9 @@
+# 0.1.0-rc.10
+
+- GM-originated token moves bypass native wall collision and solid-mask destination checks on rotating floors, including while the game is paused. Player moves remain collision checked.
+- GM bypass uses the actual update author reported by Foundry, not only a user ID carried in token flags. Scene bounds, ownership, and request freshness checks remain active.
+- 95 automated tests pass, including GM wall bypass and player/spoofed-author rejection.
+
 # 0.1.0-rc.9
 
 - Simplified Wall placement to three choices: Inner (slightly less visible floor), Matched (mask outline), and Outer (slightly more visible floor). Save & apply masks rebuilds walls with the chosen placement.

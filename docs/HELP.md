@@ -84,3 +84,7 @@ New walls automatically attach when an endpoint is within 15% of a grid square o
 Choose **Wall placement → Outer**, then **Save & apply masks** for each affected slot. This moves the wall boundary into the solid mask, revealing more of the room. Matched restores zero margin. Inner does the opposite, cropping slightly into the room.
 
 Inner and Outer target one pixel of the processing grid (not an original image pixel). With a 4,620-pixel tile and resolution 256, Outer is approximately 18 scene pixels. Higher resolution gives a finer margin. Thin barriers and narrow openings keep a reduced margin locally to protect their shape. Mask-generated walls and destination collision occupancy use the adjusted mask. Existing hand-drawn walls stay where you placed them. Inspect room edges and door connections after saving.
+
+## GM movement through walls
+
+GM token drags on rotating floors can pass through walls and enter masked areas. Players remain blocked by walls and masks. No modifier key is needed. GM moves also work while the game is paused; normal scene boundaries still apply.

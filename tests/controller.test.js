@@ -276,3 +276,21 @@ test("manual walls remain with original tile if slot is reassigned",async()=>{
  scene.walls.set("manual",document({id:"manual",c:coords,flags:{[ID]:{wall:f}}}));
  state.slots[0].tileId="";await c.tick();assert.deepEqual(scene.walls.get("manual").c,coords);
 });
+
+test("verified GM drag bypasses native walls and solid mask destinations",async()=>{
+ const {c,scene,state,gm}=setup(),t=token(scene);state.slots[0].mask={w:1,h:1,runs:[[0,1]]};
+ t.flags[ID]={ride:{slotId:"a",local:[200,0]}};
+ t.object.checkCollision=()=>{throw Error("GM move must not test walls");};
+ const change={x:750};c.intercept(t,change,{});apply(t,change);c.observeTokenRequest(t,change,gm.id);
+ await c.tick();assert.deepEqual(t.getFlag(ID,"ride").local,[300,0]);assert.equal(t.getFlag(ID,"rejected"),undefined);
+});
+test("player cannot gain GM bypass by putting a GM id in the request",async()=>{
+ const {c,scene,player}=setup(),t=token(scene);t.object.checkCollision=()=>true;
+ const change={x:750};c.intercept(t,change,{});apply(t,change);c.observeTokenRequest(t,change,player.id);
+ await c.tick();assert.equal(t.getFlag(ID,"rejected"),"request-1");
+});
+test("player drags retain wall blocking when processed by GM",async()=>{
+ const {c,scene,player,gm}=setup(),t=token(scene);t.object.checkCollision=()=>true;game.user=player;
+ const change={x:750};c.intercept(t,change,{});apply(t,change);c.observeTokenRequest(t,change,player.id);game.user=gm;
+ await c.tick();assert.equal(t.getFlag(ID,"rejected"),"request-1");
+});

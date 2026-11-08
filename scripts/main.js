@@ -47,7 +47,7 @@ Hooks.once("ready", () => {
   attachTicker(); syncFloating(true);
 });
 Hooks.on("canvasReady", () => { controller.last = 0; controller.owner = null; attachTicker(); syncFloating(true); });
-Hooks.on("canvasTearDown", () => { controller.last = 0; controller.owner = null; floating?.close(); });
+Hooks.on("canvasTearDown", () => { controller.requestAuthors.clear(); controller.last = 0; controller.owner = null; floating?.close(); });
 Hooks.on("renderSceneConfig", addSceneToggle);
 Hooks.on("updateScene", (scene, change) => {
   if (scene.id !== canvas.scene?.id) return;
@@ -64,7 +64,8 @@ Hooks.on("getSceneControlButtons", controls => {
 Hooks.on("preUpdateAmbientLight", (light, change, options) => controller.interceptLight(light, change, options));
 Hooks.on("preUpdateNote", (note, change, options) => controller.interceptNote(note, change, options));
 Hooks.on("preUpdateToken", (token, change, options) => controller.intercept(token, change, options));
-Hooks.on("updateToken", (token, change) => {
+Hooks.on("updateToken", (token, change, options, userId) => {
+  controller.observeTokenRequest(token, change, userId);
   const rejected = foundry.utils.getProperty(change, `flags.${ID}.rejected`) ?? change[`flags.${ID}.rejected`];
   if (rejected && token.getFlag(ID, "request")?.userId === game.user.id) ui.notifications.warn("Movement blocked or expired on the rotating floor.");
 });
