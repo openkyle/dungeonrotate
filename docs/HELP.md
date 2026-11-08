@@ -68,3 +68,13 @@ Smoothing can shift an edge by a few processing pixels. Inspect narrow doors and
 Under **Performance**, keep **Smooth tile and token motion** enabled. Selected tiles now animate too, and tokens glide between rotation updates. Drag animation is retained across those updates. Explicit nonanimated moves are respected. Wall/vision and scene-light geometry still update at the selected frequency; try 10 updates/second if the vision edge steps noticeably and your group’s performance allows it.
 
 Rotation no longer refreshes sheets each tick. Unsaved Settings inputs remain in place until you save or close the form.
+
+## rc.6 interaction correction
+
+Passive floor carrying no longer starts native token animations on every update. This avoids an uninterrupted animation state interfering with clicks and drags. Intentional drag movement retains a bounded animation deadline. Tile artwork remains smooth; passive token positions update at the configured geometry frequency. The Performance checkbox is now labeled Smooth tile artwork. Target Tile restores the previous canvas layer unless you have switched modes manually.
+
+## Reset and hand-drawn walls
+
+**Reset rotation** returns that slot and its riders, lights, and walls to the recorded setup angle and pauses the slot. Each tile remembers its angle when first assigned. Older saved scenes have no historical baseline; the first angle observed after this update becomes their reset angle. To establish a new baseline, unassign the tile, save, place it at the desired angle, then assign it again.
+
+New walls automatically attach when an endpoint is within 15% of a grid square of an attached wall, otherwise to the rotating floor containing the wall midpoint (Slot B wins overlapping floor regions). Walls outside these regions stay static. Draw while rotation is paused for accurate placement. Doors, door state, and other properties remain editable. Editing coordinates updates the local attachment; deletion works normally. Saving a mask replaces only mask-generated walls, preserving your additions. Reassigning a slot to another tile leaves old manual walls stationary instead of transferring them to the new tile. Existing static walls are not retroactively adopted.

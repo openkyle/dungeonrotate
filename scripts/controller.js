@@ -90,6 +90,11 @@ export class RotationController {
     if (!this.enabled(scene)) { this.last = 0; this.owner = null; return; }
     if (authority?.id !== game.user.id) { this.last = 0; this.owner = null; return; }
     const now = game.time.serverTime, state = this.state(scene);
+    let originChanged = false;
+    for (const slot of this.slots(scene, state)) if (!Number.isFinite(slot.startRotation)) {
+      slot.startRotation = scene.tiles.get(slot.tileId).rotation; originChanged = true;
+    }
+    if (originChanged) await scene.setFlag(ID, "state", state);
     if (!this.last || this.owner !== scene.id) { this.last = now; this.owner = scene.id; return; }
     if (now - this.last < 1000 / state.hz) return;
     const dt = Math.max(0, Math.min((now - this.last) / 1000, 2 / state.hz));
@@ -106,7 +111,7 @@ export class RotationController {
         [`flags.${ID}.motion`]: {angle, velocity, at: now}});
       if (velocity) for (const wall of scene.walls) {
         const f = wall.getFlag(ID, "wall");
-        if (f?.slotId === s.id) wallUpdates.push({_id: wall.id, c: wallCoordinates(f.segment, tile, angle)});
+        if (f?.slotId === s.id && (!f.tileId || f.tileId === tile.id)) wallUpdates.push({_id: wall.id, c: wallCoordinates(f.segment, tile, angle)});
       }
     }
     // Foundry has no cross-document transaction. Walls first, then token positions, then tile clock.
@@ -159,8 +164,9 @@ export class RotationController {
       if (Math.abs(x - token.x) > .001) update.x = x;
       if (Math.abs(y - token.y) > .001) update.y = y;
       if (Object.keys(update).length > 1) {
-        // Keep a drag's remaining animation time through subsequent carry updates.
-        const duration = explicitInstant ? 0 : Math.max(animationUntil-now, state.smooth ? 1000/state.hz : 0, 0);
+        // Animate deliberate moves only. Repeated native carry animations keep
+        // Foundry tokens continuously busy and can block click/drag interactions.
+        const duration = explicitInstant ? 0 : Math.max(animationUntil-now, 0);
         const key = Math.round(duration);
         if (!tokenUpdates.has(key)) tokenUpdates.set(key, []);
         tokenUpdates.get(key).push(update);
@@ -266,6 +272,7 @@ export class RotationController {
       for (const slot of prepared.slots) {
         const old = previous.slots.find(s => s.id === slot.id), tile = scene.tiles.get(slot.tileId);
         slot.running = !!tile && old.tileId === slot.tileId && old.running;
+        slot.startRotation = tile ? (old.tileId === tile.id && Number.isFinite(old.startRotation) ? old.startRotation : tile.rotation) : null;
         slot.mask = null; slot.floor = null;
         if (!tile) continue;
         if (slot.footprint === "artwork") slot.floor = await this.readFloor(tile.texture?.src);
@@ -280,7 +287,7 @@ export class RotationController {
       }
       this.assertGM(scene);
       prepared.autoFloor = true;
-      const oldWalls = scene.walls.filter(w => w.getFlag(ID, "wall"));
+      const oldWalls = scene.walls.filter(w => w.getFlag(ID, "wall") && w.getFlag(ID, "wall").source !== "manual");
       const snapshots = oldWalls.map(w => w.toObject());
       let created = [];
       try {
@@ -318,11 +325,69 @@ export class RotationController {
       [`flags.${ID}.ride`]: null, [`flags.${ID}.ack`]: n.getFlag(ID, "request")?.id ?? null}));
     if (lights.length) await scene.updateEmbeddedDocuments("AmbientLight", lights, {[ID]: true, render: false});
   }
+  manualWallAttachment(scene, coordinates, existing = null) {
+    if (!this.enabled(scene) || !Array.isArray(coordinates) || coordinates.length !== 4 || !coordinates.every(Number.isFinite)) return null;
+    const state = this.state(scene), slots = this.slots(scene, state);
+    let slot = existing?.source === "manual" ? slots.find(s => s.id === existing.slotId && s.tileId === existing.tileId) : null;
+    const endpoints = [coordinates.slice(0,2), coordinates.slice(2)];
+    if (!slot) {
+      const distance = (p,c) => {
+        const dx=c[2]-c[0],dy=c[3]-c[1],d=dx*dx+dy*dy;
+        const t=d?Math.max(0,Math.min(1,((p[0]-c[0])*dx+(p[1]-c[1])*dy)/d)):0;
+        return Math.hypot(p[0]-c[0]-t*dx,p[1]-c[1]-t*dy);
+      };
+      let best = Math.max(2, scene.grid.size * .15);
+      for (const wall of scene.walls) {
+        const f=wall.getFlag(ID,"wall"), candidate=slots.find(s=>s.id===f?.slotId && (!f.tileId || s.tileId===f.tileId));
+        if (!candidate) continue;
+        const d=Math.min(...endpoints.map(p=>distance(p,wall.c)));
+        if (d<best) {best=d;slot=candidate;}
+      }
+      if (!slot) {
+        const center=[(coordinates[0]+coordinates[2])/2,(coordinates[1]+coordinates[3])/2];
+        slot=slots.reverse().find(s=>onFloor(toLocal(center,scene.tiles.get(s.tileId)),scene.tiles.get(s.tileId),s));
+      }
+    }
+    if (!slot) return null;
+    const tile=scene.tiles.get(slot.tileId);
+    const segment=endpoints.flatMap(p=>{const local=toLocal(p,tile);return [local[0]/tile.width,local[1]/tile.height];});
+    return {slotId:slot.id,tileId:tile.id,source:"manual",segment};
+  }
+  async resetSlot(scene, state, slot, tile) {
+    slot.running=false;
+    await scene.setFlag(ID,"state",state);
+    const angle=slot.startRotation, options={[ID]:true,render:false,animate:false};
+    try {
+      const walls=scene.walls.filter(w=>{const f=w.getFlag(ID,"wall");return f?.slotId===slot.id&&(!f.tileId||f.tileId===tile.id);});
+      if(walls.length)await scene.updateEmbeddedDocuments("Wall",walls.map(w=>({_id:w.id,c:wallCoordinates(w.getFlag(ID,"wall").segment,tile,angle)})),options);
+      for(const [kind,collection,key] of [["Token",scene.tokens,"carry"],["Note",scene.notes,"carryNotes"],["AmbientLight",scene.lights,"carryLights"]]) {
+        const updates=[];
+        for(const doc of collection) {
+          const flags=doc.flags[ID]??{},center=kind==="Token"?this.center(doc,scene):[doc.x,doc.y];
+          if(this.assigned(scene,state,center,flags,key)?.id!==slot.id)continue;
+          const local=flags.ride?.slotId===slot.id?flags.ride.local:toLocal(center,tile);
+          const world=toWorld(local,tile,angle),update={_id:doc.id,x:Math.round(world[0]-(kind==="Token"?doc.width*scene.grid.size/2:0)),y:Math.round(world[1]-(kind==="Token"?doc.height*scene.grid.size/2:0))};
+          const ride={slotId:slot.id,local};
+          if(kind==="AmbientLight") {ride.rotation=flags.ride?.rotation??normalize(doc.rotation-tile.rotation);update.rotation=normalize(ride.rotation+angle);}
+          update[`flags.${ID}.ride`]=ride;
+          update[`flags.${ID}.ack`]=flags.request?.id??null;
+          updates.push(update);
+        }
+        if(updates.length)await scene.updateEmbeddedDocuments(kind,updates,options);
+      }
+      await tile.update({rotation:angle,[`flags.${ID}.motion`]:{angle,velocity:0,at:game.time.serverTime}},options);
+      this.last=game.time.serverTime;
+    } catch(error) {
+      this.failure=true;this.lastError=`Reset stopped partway: ${error.message}`;this.onStatusChange?.();throw Error(this.lastError);
+    }
+  }
   async control(scene, slotId, action) {
     return this.serial(async () => {
       this.assertGM(scene);
       const state = this.state(scene), s = state.slots.find(s => s.id === slotId), tile = scene.tiles.get(s?.tileId);
       if (!tile) throw Error("Select and save a tile first.");
+      if (!Number.isFinite(s.startRotation)) s.startRotation = tile.rotation;
+      if (action === "reset") { await this.resetSlot(scene, state, s, tile); return; }
       if (action === "start") {
         if (this.failure) throw Error(`Engine stopped: ${this.lastError || "previous update failed"}. Use Resume engine first.`);
         if (!this.enabled(scene)) throw Error('Enable "This scene has Rotating Elements" in Scene Configuration first.');
@@ -364,7 +429,7 @@ export class RotationController {
       this.assertGM(scene);
       const state = this.state(scene), s = state.slots.find(s => s.id === slotId);
       if (s.running) throw Error("Pause this slot before removing walls.");
-      const ids = scene.walls.filter(w => w.getFlag(ID, "wall")?.slotId === slotId).map(w => w.id);
+      const ids = scene.walls.filter(w => w.getFlag(ID, "wall")?.slotId === slotId && w.getFlag(ID, "wall").source !== "manual").map(w => w.id);
       if (ids.length) await scene.deleteEmbeddedDocuments("Wall", ids, {[ID]: true, render: false});
       s.mask = null;
       await scene.setFlag(ID, "state", state);

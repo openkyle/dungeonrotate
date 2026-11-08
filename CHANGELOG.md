@@ -1,3 +1,11 @@
+# 0.1.0-rc.6
+
+- Removed continuously restarted native token animations for passive floor carrying. These can leave tokens busy during clicks and drags. Deliberate token moves retain bounded drag animation, which ends instead of transitioning into another carry animation. Tile artwork remains smooth; passive token carrying returns to sampled updates for interaction reliability.
+- Target Tile restores the previous canvas layer on selection, Escape, or timeout. It does not override a manually selected layer or restore during scene teardown.
+- Added Reset rotation per slot: pauses and returns the floor, walls, tokens, notes, and lights to its recorded setup angle. Older configurations adopt their first angle after updating as the baseline.
+- Newly drawn walls attach to nearby rotating walls or the floor containing their midpoint. Doors and wall properties remain editable; mask rebuilds preserve manual walls. Walls outside rotating floors remain static.
+- 88 automated tests pass. Live token interaction with the user’s Foundry environment remains to be confirmed.
+
 # 0.1.0-rc.5
 
 - Added Light, Balanced, Strong, and Off wall smoothing. Traces closed outlines, averages small edge details by arc length, then fits diagonal wall segments. Preserves small rectangular barriers and contact points; rejects collapsed/inverted contours and falls back to exact boundaries on crossing geometry.

@@ -58,3 +58,7 @@ Configure stages every image before writing documents, creates replacement walls
 ## Large source masks (rc.3)
 
 The source image is browser-decoded once. readMask scans native-resolution rectangles through a scratch canvas no larger than 1024 × 256 pixels, clears that canvas for each rectangle, and merges occupancy into the fixed-resolution output grid. Source offsets determine cell coordinates globally; chunk boundaries do not change the result. Every opaque dark pixel contributes, preserving the original conservative semantics without allocating a full-source RGBA buffer. Processing yields after four chunks and releases the scratch surface in a finally block. Browser image decoding still incurs source-image memory; this does not claim unlimited image sizes or constant total decoder memory.
+
+## rc.6 interaction correction
+
+Passive floor carrying no longer starts native token animations on every update. This avoids an uninterrupted animation state interfering with clicks and drags. Intentional drag movement retains a bounded animation deadline. Tile artwork remains smooth; passive token positions update at the configured geometry frequency. The Performance checkbox is now labeled Smooth tile artwork. Target Tile restores the previous canvas layer unless you have switched modes manually.

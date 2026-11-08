@@ -58,3 +58,18 @@ test("native file picker browses the inferred storage directory once without ope
  };
  assert.equal(await findMatchingMask("https://assets.example.test/library/Ring.webp"),"https://assets.example.test/library/Ring_Mask.webp");assert.equal(calls,1);
 });
+
+test("target restores Token Controls after picking and Escape, but not during scene teardown",()=>{
+ const env=setup();canvas.scene={id:"scene"};
+ const tokens={activate(){env.calls.push("tokens");canvas.activeLayer=tokens;}};
+ canvas.activeLayer=tokens;canvas.tiles.activate=()=>{canvas.activeLayer=canvas.tiles;};
+ new TileTargetSession("scene",()=>{}).start();env.emit("controlTile",{document:{id:"tile",parent:{id:"scene"}}},true);
+ assert.equal(canvas.activeLayer,tokens);
+ new TileTargetSession("scene",()=>{}).start();env.keys.get("keydown")({key:"Escape",preventDefault(){}});assert.equal(canvas.activeLayer,tokens);
+ new TileTargetSession("scene",()=>{}).start();env.emit("canvasTearDown");assert.equal(canvas.activeLayer,canvas.tiles);
+});
+test("target cancellation does not override a layer the user chose manually",()=>{
+ const env=setup();canvas.scene={id:"scene"};canvas.activeLayer={activate(){throw Error("Unexpected layer restore");}};
+ canvas.tiles.activate=()=>{canvas.activeLayer=canvas.tiles;};const session=new TileTargetSession("scene",()=>{}).start();
+ const lighting={};canvas.activeLayer=lighting;session.cancel();assert.equal(canvas.activeLayer,lighting);
+});

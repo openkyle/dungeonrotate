@@ -8,25 +8,29 @@ export class TileTargetSession {
   start() {
     TileTargetSession.active?.cancel();
     TileTargetSession.active = this;
+    this.previousLayer = canvas.activeLayer;
     canvas.tiles.activate();
     canvas.tiles.releaseAll();
     this.controlHook = Hooks.on("controlTile", (tile, controlled) => {
       if (!controlled || tile.document.parent?.id !== this.sceneId) return;
       this.finish(); Promise.resolve(this.onPick(tile.document)).catch(error => ui.notifications.error(error.message));
     });
-    this.sceneHook = Hooks.on("canvasTearDown", () => this.cancel());
+    this.sceneHook = Hooks.on("canvasTearDown", () => this.cancel(false));
     this.keyHandler = event => { if (event.key === "Escape") { event.preventDefault(); this.cancel(); } };
     window.addEventListener("keydown", this.keyHandler);
     this.timer = setTimeout(() => this.cancel(), 60000);
     ui.notifications.info("Click the map tile to use. Press Escape to cancel.");
     return this;
   }
-  finish() {
+  finish(restoreLayer = true) {
     if (this.finished) return;
     this.finished = true;
     Hooks.off("controlTile", this.controlHook); Hooks.off("canvasTearDown", this.sceneHook);
     window.removeEventListener("keydown", this.keyHandler); clearTimeout(this.timer);
     if (TileTargetSession.active === this) TileTargetSession.active = null;
+    if (restoreLayer && canvas.scene?.id === this.sceneId && canvas.activeLayer === canvas.tiles) {
+      this.previousLayer?.activate();
+    }
   }
-  cancel() { if (!this.finished) { this.finish(); this.onCancel(); } }
+  cancel(restoreLayer = true) { if (!this.finished) { this.finish(restoreLayer); this.onCancel(); } }
 }

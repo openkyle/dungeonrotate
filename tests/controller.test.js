@@ -153,7 +153,7 @@ test("manual light position and rotation update their floor-relative anchors",as
 });
 test("legacy light opt-out is ignored; slot carry-light toggle stops carrying",async()=>{
   const {c,scene,state}=setup(),l=light(scene);l.flags[ID]={attachment:"none"};await c.tick();assert.ok(l.y>500);assert.equal(l.rotation,92);
-  const y=l.y;state.slots[0].carryLights=false;game.time.serverTime+=200;await c.tick();assert.equal(l.y,y);
+  const y=l.y;scene.flags[ID].state.slots[0].carryLights=false;game.time.serverTime+=200;await c.tick();assert.equal(l.y,y);
 });
 test("light attachment keeps its angular offset on a tile already rotated 270 degrees",async()=>{
   const {c,scene}=setup(),l=light(scene);l.x=2200;l.y=500;l.rotation=30;l.flags[ID]={attachment:"b"};await c.tick();assert.equal(l.rotation,29);
@@ -224,10 +224,10 @@ test("Start reports an existing engine failure instead of silently arming a stop
  const {c,scene,state}=setup();state.slots[0].running=false;c.failure=true;c.lastError="Update denied";
  await assert.rejects(()=>c.control(scene,"a","start"),/Update denied.*Resume engine/);assert.equal(state.slots[0].running,false);
 });
-test("rotation batches suppress sheet rerenders and animate carried tokens between samples",async()=>{
+test("rotation batches suppress sheet rerenders without keeping carried tokens in native animation",async()=>{
  const {c,scene}=setup();token(scene);note(scene);await c.tick();
  assert.ok(scene.calls.every(call=>call.options.render===false));
- const call=scene.calls.find(call=>call.type==="Token");assert.equal(call.options.animate,true);assert.equal(call.options.animation.duration,200);
+ const call=scene.calls.find(call=>call.type==="Token");assert.equal(call.options.animate,false);assert.equal(call.options.animation.duration,0);
 });
 test("drag animation retains its remaining duration across subsequent floor ticks",async()=>{
  const {c,scene}=setup(),t=token(scene),change={x:750};
@@ -238,7 +238,7 @@ test("drag animation retains its remaining duration across subsequent floor tick
  assert.equal(scene.calls.find(call=>call.type==="Token").options.animation.duration,800);
  game.time.serverTime=2200;scene.calls=[];await c.tick();
  assert.equal(t.getFlag(ID,"ride").animationUntil,undefined);
- assert.equal(scene.calls.find(call=>call.type==="Token").options.animation.duration,200);
+ assert.equal(scene.calls.find(call=>call.type==="Token").options.animation.duration,0);
 });
 test("explicit nonanimated movement is respected",async()=>{
  const {c,scene}=setup(),t=token(scene),change={x:750};c.intercept(t,change,{animate:false});apply(t,change);await c.tick();
@@ -247,4 +247,32 @@ test("explicit nonanimated movement is respected",async()=>{
 test("selected tile still receives smooth frame rendering",()=>{
  const {c,scene}=setup(),t=scene.tiles.get("t1");t.object={controlled:true,mesh:{rotation:0}};t.flags[ID]={motion:{angle:10,velocity:1,at:800}};
  c.draw();assert.ok(Math.abs(t.object.mesh.rotation-10.2*Math.PI/180)<.00001);
+});
+
+test("reset returns tile, token, journal and directional light to their saved starting orientation",async()=>{
+ const {c,scene}=setup(),t=token(scene),n=note(scene),l=light(scene);const original=[t.x,t.y,n.x,n.y,l.x,l.y,l.rotation];
+ await c.tick();game.time.serverTime+=200;await c.tick();await c.control(scene,"a","reset");
+ assert.equal(scene.tiles.get("t1").rotation,0);assert.equal(c.state().slots[0].running,false);
+ assert.deepEqual([t.x,t.y,n.x,n.y,l.x,l.y,l.rotation],original);
+ assert.equal(scene.tiles.get("t2").rotation,268);
+});
+test("new manual walls attach by floor and retain door settings while rotating",async()=>{
+ const {c,scene}=setup();const coords=[600,500,700,500],f=c.manualWallAttachment(scene,coords);
+ assert.equal(f.source,"manual");assert.equal(f.tileId,"t1");
+ const w=document({id:"door",c:coords,door:1,ds:1,flags:{[ID]:{wall:f}}});scene.walls.set(w.id,w);
+ await c.tick();assert.notDeepEqual(w.c,coords);assert.equal(w.door,1);assert.equal(w.ds,1);
+ await c.control(scene,"a","reset");assert.deepEqual(w.c,coords);
+});
+test("mask rebuild preserves hand drawn walls and reset baseline",async()=>{
+ const {c,scene}=setup();await c.tick();const f=c.manualWallAttachment(scene,[600,500,700,500]);
+ scene.walls.set("manual",document({id:"manual",c:[600,500,700,500],flags:{[ID]:{wall:f}}}));
+ c.readFloor=async()=>null;await c.configure(scene,c.state());assert.ok(scene.walls.has("manual"));assert.equal(c.state().slots[0].startRotation,0);
+});
+test("new walls outside rotating floors remain static",()=>{
+ const {c,scene}=setup();assert.equal(c.manualWallAttachment(scene,[4000,4000,4100,4000]),null);
+});
+test("manual walls remain with original tile if slot is reassigned",async()=>{
+ const {c,scene,state}=setup();const coords=[600,500,700,500],f=c.manualWallAttachment(scene,coords);
+ scene.walls.set("manual",document({id:"manual",c:coords,flags:{[ID]:{wall:f}}}));
+ state.slots[0].tileId="";await c.tick();assert.deepEqual(scene.walls.get("manual").c,coords);
 });

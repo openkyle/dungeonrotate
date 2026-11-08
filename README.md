@@ -1,6 +1,6 @@
 # Rotating Dungeon — Tiles & Mask Walls
 
-Foundry VTT **v11**, targeted at build **315**. Version **0.1.0-rc.5** is a release candidate. The requested D&D5e 2.4.1 / Forge environment still needs live validation.
+Foundry VTT **v11**, targeted at build **315**. Version **0.1.0-rc.6** is a release candidate. The requested D&D5e 2.4.1 / Forge environment still needs live validation.
 
 ## Install or update
 
@@ -31,7 +31,7 @@ Masks must match the unrotated artwork rectangle and padding. The selected tile 
 
 Saving automatically builds/replaces managed walls; clearing the mask and saving removes that slot’s managed walls. Hand-drawn walls remain untouched. A tile without a mask may rotate without generated walls. No Generate/Remove buttons or start/pause controls clutter Settings.
 
-Masks are conservatively downsampled to 64/128/256 cells and exact orthogonal boundary runs are merged without removing holes. Large source masks are scanned automatically in 1024 × 256 pixel chunks; there is no module-imposed 16-megapixel limit. Scratch RGBA reads are at most 1 MiB, although the browser still needs memory to decode the original image. The generated geometry limit remains 1,200 segments per tile. Lower resolution or simplify a detailed mask if needed. Mask generation errors identify the slot and file; images are validated before scene writes and failed writes attempt to restore the previous managed-wall setup.
+Masks are conservatively downsampled to 64/128/256 cells and traced into averaged closed outlines with adjustable smoothing (Off retains exact orthogonal edges). Large source masks are scanned automatically in 1024 × 256 pixel chunks; there is no module-imposed 16-megapixel limit. Scratch RGBA reads are at most 1 MiB, although the browser still needs memory to decode the original image. The generated geometry limit remains 1,200 segments per tile. Lower resolution or simplify a detailed mask if needed. Mask generation errors identify the slot and file; images are validated before scene writes and failed writes attempt to restore the previous managed-wall setup.
 
 ## Automatic scene riders
 
@@ -61,3 +61,5 @@ python3 tools/package.py --repository openkyle/dungeonrotate
 ```
 
 See [validation](docs/VALIDATION.md) and [architecture](docs/ARCHITECTURE.md). CI runs syntax checks/tests. The manually dispatched release workflow builds and publishes the ZIP and manifest. The public main-branch manifest tracks the latest prepared release, while each ZIP is tied to its version tag. No user artwork, tile IDs, or journal content is included. MIT license.
+
+In rc.6, passive token carrying uses nonanimated document updates to avoid keeping tokens permanently busy. Intentional drag moves still animate. Tile artwork remains smooth. Target Tile restores the previous toolbar mode afterward.

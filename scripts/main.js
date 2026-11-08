@@ -82,9 +82,21 @@ Hooks.on("preDeleteTile", (tile, options) => {
     ui.notifications.warn("Choose None for this tile's slot and save settings before deleting it. Its mask walls are removed automatically."); return false;
   }
 });
-for (const event of ["preUpdateWall", "preDeleteWall"]) Hooks.on(event, (wall, change, options) => {
-  const context = event === "preDeleteWall" ? change : options;
-  if (wall.getFlag(ID, "wall") && !context?.[ID]) {
-    ui.notifications.warn("Edit the mask and save Rotating Dungeon settings to refresh these walls. Clear the mask field and save to remove them."); return false;
+Hooks.on("preCreateWall", (wall, data, options) => {
+  if(options[ID] || !game.user.isGM) return;
+  const attachment=controller.manualWallAttachment(wall.parent,data.c??wall.c);
+  if(attachment)wall.updateSource({[`flags.${ID}.wall`]:attachment});
+});
+Hooks.on("preUpdateWall", (wall, change, options) => {
+  if(options[ID])return;
+  const f=wall.getFlag(ID,"wall");
+  if(f?.source==="manual") {
+    if(change.c)change[`flags.${ID}.wall`]=controller.manualWallAttachment(wall.parent,change.c,f);
+    return;
   }
+  if(f) {ui.notifications.warn("Edit the mask and save settings to change generated walls.");return false;}
+});
+Hooks.on("preDeleteWall", (wall, options) => {
+  const f=wall.getFlag(ID,"wall");
+  if(f && f.source!=="manual" && !options[ID]) {ui.notifications.warn("Clear the mask and save settings to remove generated walls.");return false;}
 });
