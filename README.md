@@ -1,6 +1,6 @@
 # Rotating Dungeon — Tiles & Mask Walls
 
-Foundry VTT **v11**, targeted at build **315**. Version **0.1.0-rc.7** is a release candidate. The requested D&D5e 2.4.1 / Forge environment still needs live validation.
+Foundry VTT **v11**, targeted at build **315**. Version **0.1.0-rc.8** is a release candidate. The requested D&D5e 2.4.1 / Forge environment still needs live validation.
 
 ## Install or update
 

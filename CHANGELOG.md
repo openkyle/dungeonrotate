@@ -1,3 +1,10 @@
+# 0.1.0-rc.8
+
+- Added per-slot Wall margin: Original outline, Widen rooms (small/medium), and Thicken walls (small/medium). Widen rooms reveals more floor by moving the boundary into the solid mask.
+- Margin updates both traced walls and collision occupancy before smoothing. Small/medium target one/two processing cells; the distance scales with tile size and mask resolution. Thin barriers and narrow openings are protected locally, so the full margin is not applied where it would break them. Thickening is clipped to the tile image bounds.
+- Existing scenes default to Original outline until changed and saved. Hand-drawn walls are not shifted by mask margins.
+- 92 automated tests pass; native-browser preview checked against the supplied mask screenshot. Live Foundry vision verification remains pending.
+
 # 0.1.0-rc.7
 
 - Added Set as default rotation to each slot in the floating controls. Saves that tile’s current committed angle immediately as its Reset rotation destination, without moving attached objects or changing running/paused state. Only the controlling GM can use it.

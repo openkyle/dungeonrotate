@@ -112,3 +112,68 @@ export function smoothBoundaries(mask,tolerance=1) {
   }
   return segments.map(({a,b})=>[a[0]/mask.w-.5,a[1]/mask.h-.5,b[0]/mask.w-.5,b[1]/mask.h-.5]);
 }
+
+/** Positive margin expands open room space; negative margin thickens solid walls. */
+export function offsetMask(mask, margin = 0) {
+  if(![-2,-1,0,1,2].includes(margin))throw Error("Invalid wall margin.");
+  if(!margin)return mask;
+  const radius=Math.abs(margin),grow=margin<0,runs=[];
+  for(let y=0;y<mask.h;y++) {
+    const row=[];let start=-1;
+    for(let x=0;x<=mask.w;x++) {
+      let solid=false;
+      if(x<mask.w) {
+        solid=!grow;
+        outer: for(let dy=-radius;dy<=radius;dy++)for(let dx=-radius;dx<=radius;dx++) {
+          if(dx*dx+dy*dy>radius*radius)continue;
+          const occupied=solidCell(mask,x+dx,y+dy);
+          if(grow?occupied:!occupied){solid=grow;break outer;}
+        }
+      }
+      if(solid&&start<0)start=x;
+      if(!solid&&start>=0){row.push(start,x);start=-1;}
+    }
+    runs.push(row);
+  }
+  const desired={w:mask.w,h:mask.h,runs};
+  const cells=Array.from({length:mask.w*mask.h},(_,i)=>solidCell(mask,i%mask.w,Math.floor(i/mask.w)));
+  const at=(x,y)=>x>=0&&y>=0&&x<mask.w&&y<mask.h?cells[y*mask.w+x]:false;
+  function components(x,y,solid,diagonal) {
+    const points=[];
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)if((dx||dy)&&at(x+dx,y+dy)===solid)points.push([dx,dy]);
+    let count=0;
+    while(points.length) {
+      count++;const stack=[points.pop()];
+      while(stack.length) {const a=stack.pop();for(let i=points.length-1;i>=0;i--) {
+        const b=points[i],dx=Math.abs(a[0]-b[0]),dy=Math.abs(a[1]-b[1]);
+        if(diagonal?Math.max(dx,dy)===1:dx+dy===1)stack.push(...points.splice(i,1));
+      }}
+    }
+    return count;
+  }
+  // Only flip simple boundary pixels. Thin barriers, tiny islands and narrow
+  // openings keep their original edge where a full margin would break them.
+  for(let pass=0;pass<4;pass++) {
+    let changed=false;
+    for(let y=0;y<mask.h;y++)for(let x=0;x<mask.w;x++) {
+      const target=solidCell(desired,x,y);
+      if(at(x,y)===target)continue;
+      if(!target && ![-1,0].some(dx=>[-1,0].some(dy=>
+        at(x+dx,y+dy)&&at(x+dx+1,y+dy)&&at(x+dx,y+dy+1)&&at(x+dx+1,y+dy+1))))continue;
+      if(components(x,y,true,false)!==1||components(x,y,false,true)!==1)continue;
+      cells[y*mask.w+x]=target;changed=true;
+    }
+    if(!changed)break;
+  }
+  const protectedRuns=[];
+  for(let y=0;y<mask.h;y++) {
+    const row=[];let start=-1;
+    for(let x=0;x<=mask.w;x++) {
+      const solid=x<mask.w&&cells[y*mask.w+x];
+      if(solid&&start<0)start=x;
+      if(!solid&&start>=0){row.push(start,x);start=-1;}
+    }
+    protectedRuns.push(row);
+  }
+  return {w:mask.w,h:mask.h,runs:protectedRuns};
+}

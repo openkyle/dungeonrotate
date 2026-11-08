@@ -278,7 +278,7 @@ export class RotationController {
         if (slot.footprint === "artwork") slot.floor = await this.readFloor(tile.texture?.src);
         if (!slot.maskPath) continue;
         let result;
-        try { result = await this.readMask(slot.maskPath, slot.resolution, slot.threshold, slot.wallSmoothing ?? 1); }
+        try { result = await this.readMask(slot.maskPath, slot.resolution, slot.threshold, slot.wallSmoothing ?? 1, slot.wallMargin ?? 0); }
         catch (error) {
           const filename = slot.maskPath.split("/").pop().split(/[?#]/)[0];
           throw Error(`Slot ${slot.id.toUpperCase()} — ${filename}: ${error.message}`);
@@ -415,7 +415,7 @@ export class RotationController {
       if (!tile || s.running) throw Error("Select a tile and pause this slot before generating walls.");
       validateState(state, scene.tiles);
       if (scene.walls.some(w => w.getFlag(ID, "wall")?.slotId === slotId)) throw Error("Remove this slot's existing generated walls first.");
-      const {mask, segments} = await readMask(s.maskPath, s.resolution, s.threshold, s.wallSmoothing ?? 1);
+      const {mask, segments} = await readMask(s.maskPath, s.resolution, s.threshold, s.wallSmoothing ?? 1, s.wallMargin ?? 0);
       this.assertGM(scene);
       const data = segments.map(segment => ({c: wallCoordinates(segment, tile, tile.rotation),
         move: s.collision ? CONST.WALL_MOVEMENT_TYPES.NORMAL : CONST.WALL_MOVEMENT_TYPES.NONE,

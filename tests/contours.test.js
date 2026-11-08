@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {rasterize,boundaries} from '../scripts/core.js';
-import {traceContours,smoothBoundaries} from '../scripts/contours.js';
+import {rasterize,boundaries,solidCell} from '../scripts/core.js';
+import {traceContours,smoothBoundaries,offsetMask} from '../scripts/contours.js';
 function mask(w,h,solid){const p=new Uint8ClampedArray(w*h*4);for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(solid(x,y))p.set([0,0,0,255],(y*w+x)*4);return rasterize(p,w,h,256,128);}
 function closed(segments){const degrees=new Map();for(const s of segments)for(const p of [s.slice(0,2),s.slice(2)]){const k=p.join(',');degrees.set(k,(degrees.get(k)??0)+1);}assert.ok([...degrees.values()].every(n=>n%2===0));}
 test('curved room becomes fewer diagonal walls with closed inner and outer outlines',()=>{
@@ -26,3 +26,20 @@ test('doors in ring outlines stay open after smoothing',()=>{
  assert.ok(!s.some(([x1,y1,x2,y2])=>x1>0&&x2>0&&((y1<0&&y2>0)||(y2<0&&y1>0))));
 });
 test('invalid smoothing is rejected',()=>assert.throws(()=>smoothBoundaries(mask(2,2,()=>true),3),/smoothing/));
+
+test('positive wall margin widens the open room and updates collision occupancy',()=>{
+ const m=mask(30,30,(x,y)=>x>=3&&x<27&&y>=3&&y<27&&!(x>=10&&x<20&&y>=10&&y<20));
+ const wider=offsetMask(m,1);assert.equal(solidCell(m,9,15),true);assert.equal(solidCell(wider,9,15),false);assert.equal(solidCell(wider,8,15),true);
+ assert.equal(traceContours(wider).length,2);closed(smoothBoundaries(wider,1));
+});
+test('negative margin thickens walls and zero preserves exact occupancy',()=>{
+ const m=mask(20,20,(x,y)=>x>=7&&x<13&&y>=7&&y<13);
+ assert.equal(offsetMask(m,0),m);const thick=offsetMask(m,-1);assert.equal(solidCell(thick,6,10),true);assert.equal(solidCell(thick,5,10),false);
+});
+test('margin preserves thin barriers instead of removing them',()=>{
+ const m=offsetMask(mask(20,20,(x,y)=>x===10&&y>2&&y<17),1);assert.equal(traceContours(m).length,1);assert.ok(solidCell(m,10,10));
+});
+test('thickening preserves a narrow doorway',()=>{
+ const m=mask(30,30,(x,y)=>x>=3&&x<27&&y>=3&&y<27&&!(x>=9&&x<21&&y>=9&&y<21)&&!(x>=20&&y===15));
+ assert.equal(traceContours(offsetMask(m,-1)).length,traceContours(m).length);
+});
