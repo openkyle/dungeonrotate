@@ -62,7 +62,10 @@ export function createFloatingClass(controller, openSettings) {
           else if (action === "pauseAll") {
             for (const s of controller.slots(scene)) await controller.control(scene, s.id, "pause");
           } else if (action === "resume") { controller.failure = false; controller.lastError = ""; controller.last = 0; }
-          else await controller.control(scene, slot, action);
+          else {
+            await controller.control(scene, slot, action);
+            if (action === "setDefault") ui.notifications.info(`Slot ${slot.toUpperCase()}: default rotation saved. Reset rotation will return here.`);
+          }
         } catch (error) { ui.notifications.error(error.message); }
         finally { button.disabled = false; if (action !== "target") this.render(false); }
       });

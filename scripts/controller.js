@@ -387,6 +387,11 @@ export class RotationController {
       const state = this.state(scene), s = state.slots.find(s => s.id === slotId), tile = scene.tiles.get(s?.tileId);
       if (!tile) throw Error("Select and save a tile first.");
       if (!Number.isFinite(s.startRotation)) s.startRotation = tile.rotation;
+      if (action === "setDefault") {
+        s.startRotation = normalize(tile.rotation);
+        await scene.setFlag(ID, "state", state);
+        return;
+      }
       if (action === "reset") { await this.resetSlot(scene, state, s, tile); return; }
       if (action === "start") {
         if (this.failure) throw Error(`Engine stopped: ${this.lastError || "previous update failed"}. Use Resume engine first.`);

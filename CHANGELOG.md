@@ -1,3 +1,7 @@
+# 0.1.0-rc.7
+
+- Added Set as default rotation to each slot in the floating controls. Saves that tile’s current committed angle immediately as its Reset rotation destination, without moving attached objects or changing running/paused state. Only the controlling GM can use it.
+
 # 0.1.0-rc.6
 
 - Removed continuously restarted native token animations for passive floor carrying. These can leave tokens busy during clicks and drags. Deliberate token moves retain bounded drag animation, which ends instead of transitioning into another carry animation. Tile artwork remains smooth; passive token carrying returns to sampled updates for interaction reliability.
