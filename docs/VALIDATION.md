@@ -58,3 +58,7 @@ The source and installer are prepared for publication in **openkyle/dungeonrotat
 - Node regression: 5000 × 4000 synthetic image exceeds the old cap, is read in chunks no larger than 262,144 pixels, preserves the far-edge black pixel, clears every scratch chunk, and releases the canvas.
 - Chunked occupancy equals whole-image reduction across uneven boundaries with mixed transparency and one-pixel lines.
 - Native browser harness: a real 5000 × 4000 PNG decoded and converted successfully in 190 ms on the development browser, producing an expected 128 × 103 occupancy grid and eight wall segments. A one-pixel line, far-edge pixel, and transparent chunk were checked. This timing is a single local measurement, not a Foundry performance guarantee. The user's actual Forge mask has not been fetched or tested here.
+
+## rc.5 checks
+
+81 automated tests pass. Native-browser comparison using a supplied mask screenshot verified 1,158 exact segments reduced to 335 Balanced / 259 Strong. Regression checks cover closed loops, ring doorway preservation, small holes/islands, thin strips, corner contacts, native token animation options/deadlines, selected tile rendering, suppressed sheet renders, and dirty-form preservation. The user confirmed that global pause caused the earlier Start report. Live multi-client animation, moving vision, and input focus with the user's other modules remain to be checked in Foundry.

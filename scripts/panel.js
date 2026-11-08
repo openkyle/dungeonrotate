@@ -11,6 +11,11 @@ export function createPanelClass(controller) {
     constructor(...args) {
       super(...args); this.sceneId = canvas.scene?.id; this.targetSession = null; this.lookup = {};
     }
+    render(force = false, options = {}) {
+      // Embedded scene updates must never discard a draft or steal keyboard focus.
+      if (this.rendered && this.dirty) return this;
+      return super.render(force, options);
+    }
     get scene() { return game.scenes.get(this.sceneId); }
     getData() {
       const scene = this.scene;
@@ -27,6 +32,7 @@ export function createPanelClass(controller) {
             tiles: [...scene.tiles].map(t => { const name = (t.texture.src ?? "No image").split("/").pop(); return {id: t.id, selected: t.id === s.tileId,
               label: `${t.id} — ${name.length > 48 ? name.slice(0,45)+"…" : name}`}; }),
             footprints: [{value:"artwork",label:"Automatic — tile transparency"},{value:"rectangle",label:"Whole rectangle"},{value:"radial",label:"Radial bands (rings)"}].map(f=>({...f,selected:f.value===footprint})),
+            smoothingOptions: [{value:0,label:"Off — exact pixels"},{value:.5,label:"Light"},{value:1,label:"Balanced (recommended)"},{value:2,label:"Strong"}].map(o=>({...o,selected:o.value===(s.wallSmoothing??1)})),
             resolutions: [64,128,256].map(n => ({n, selected: n === s.resolution}))};
         })};
     }
@@ -35,6 +41,7 @@ export function createPanelClass(controller) {
       const tileField = html.find(`[name='${slot}.tileId']`), maskField = html.find(`[name='${slot}.maskPath']`);
       const changed = this.selectedTiles?.[slot] !== tile?.id;
       this.selectedTiles ??= {}; this.selectedTiles[slot] = tile?.id ?? "";
+      this.dirty = true;
       tileField.val(tile?.id ?? "");
       html.find(`[data-tile-id='${slot}']`).text(tile?.id ?? "Not selected");
       if (changed) maskField.val("");
@@ -47,6 +54,7 @@ export function createPanelClass(controller) {
     }
     activateListeners(html) {
       super.activateListeners(html);
+      html.find("input, select").on("input change", () => { this.dirty = true; });
       this.selectedTiles = Object.fromEntries(controller.state(this.scene).slots.map(s => [s.id, s.tileId]));
       html.find("select[data-slot-select]").on("change", event => {
         const slot = event.currentTarget.dataset.slotSelect;
@@ -60,7 +68,7 @@ export function createPanelClass(controller) {
           if (action === "browse") {
             const field = html.find(`[name='${slot}.maskPath']`);
             new FilePicker({type:"image", current:field.val(), callback:path => {
-              field.val(path); html.find(`[data-mask-status='${slot}']`).text("Save to turn this mask into walls.");
+              this.dirty = true; field.val(path); html.find(`[data-mask-status='${slot}']`).text("Save to turn this mask into walls.");
             }}).render(true);
           } else if (action === "target") {
             await this.minimize();
@@ -80,10 +88,11 @@ export function createPanelClass(controller) {
         state.hz = Number(form.hz); state.smooth = !!form.smooth;
         for (const slot of state.slots) {
           for (const field of ["tileId", "maskPath", "footprint", "bands"]) slot[field] = String(form[`${slot.id}.${field}`] ?? "").trim();
-          for (const field of ["speed", "direction", "resolution", "threshold"]) slot[field] = Number(form[`${slot.id}.${field}`]);
+          for (const field of ["speed", "direction", "resolution", "threshold", "wallSmoothing"]) slot[field] = Number(form[`${slot.id}.${field}`]);
           for (const field of ["carry", "carryNotes", "carryLights", "vision", "collision"]) slot[field] = !!form[`${slot.id}.${field}`];
         }
         const count = await controller.configure(this.scene, state);
+        this.dirty = false;
         ui.notifications.info(`Saved. ${count} mask walls applied; journal pins and lights are detected automatically.`); this.render(false);
       } catch (error) { ui.notifications.error(error.message); }
       finally { button.prop("disabled", false).text("Save & apply masks"); }

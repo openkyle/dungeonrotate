@@ -18,7 +18,7 @@ export function contains(local, tile) {
 }
 export function slotDefaults(id) {
   return {id, tileId: "", maskPath: "", speed: 0.5, direction: 1, carry: true, carryNotes: true, carryLights: true,
-    vision: true, collision: true, running: false, footprint: "artwork", bands: "0-1", resolution: 128, threshold: 128, mask: null, floor: null};
+    vision: true, collision: true, running: false, footprint: "artwork", bands: "0-1", resolution: 256, threshold: 128, wallSmoothing: 1, mask: null, floor: null};
 }
 export function defaultState() { return {schema: SCHEMA, autoFloor: true, hz: 5, smooth: true, slots: [slotDefaults("a"), slotDefaults("b")]}; }
 export function validateState(state, tiles) {
@@ -31,6 +31,7 @@ export function validateState(state, tiles) {
     if (![1, -1].includes(s.direction)) throw Error("Invalid rotation direction.");
     if (![64, 128, 256].includes(s.resolution)) throw Error("Invalid mask resolution.");
     if (!Number.isInteger(s.threshold) || s.threshold < 1 || s.threshold > 254) throw Error("Mask threshold must be 1–254.");
+    if (![0, .5, 1, 2].includes(s.wallSmoothing ?? 1)) throw Error("Invalid wall smoothing.");
     if (!["artwork", "rectangle", "radial"].includes(s.footprint)) throw Error("Invalid floor footprint.");
     parseBands(s.bands);
     if (!s.tileId) continue;

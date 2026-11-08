@@ -16,7 +16,7 @@ function attachTicker() {
   if (ticker === canvas.app?.ticker) return;
   ticker?.remove(controller.draw, controller);
   ticker = canvas.app?.ticker;
-  ticker?.add(controller.draw, controller);
+  ticker?.add(controller.draw, controller, -10);
 }
 Hooks.once("init", () => {
   controller.openHelp = () => new Application({id:"rotating-dungeon-help",title:"Rotating Elements — Help",
@@ -49,7 +49,11 @@ Hooks.once("ready", () => {
 Hooks.on("canvasReady", () => { controller.last = 0; controller.owner = null; attachTicker(); syncFloating(true); });
 Hooks.on("canvasTearDown", () => { controller.last = 0; controller.owner = null; floating?.close(); });
 Hooks.on("renderSceneConfig", addSceneToggle);
-Hooks.on("updateScene", scene => { if (scene.id === canvas.scene?.id) syncFloating(true); });
+Hooks.on("updateScene", (scene, change) => {
+  if (scene.id !== canvas.scene?.id) return;
+  const configChanged = Object.keys(change).some(k => k === `flags.${ID}` || k.startsWith(`flags.${ID}.`)) || change.flags?.[ID];
+  if (configChanged || Object.hasOwn(change, "name")) syncFloating(true);
+});
 Hooks.on("pauseGame", () => { controller.last = 0; syncFloating(false); });
 Hooks.on("userConnected", () => syncFloating(false));
 Hooks.on("getSceneControlButtons", controls => {

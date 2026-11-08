@@ -224,3 +224,27 @@ test("Start reports an existing engine failure instead of silently arming a stop
  const {c,scene,state}=setup();state.slots[0].running=false;c.failure=true;c.lastError="Update denied";
  await assert.rejects(()=>c.control(scene,"a","start"),/Update denied.*Resume engine/);assert.equal(state.slots[0].running,false);
 });
+test("rotation batches suppress sheet rerenders and animate carried tokens between samples",async()=>{
+ const {c,scene}=setup();token(scene);note(scene);await c.tick();
+ assert.ok(scene.calls.every(call=>call.options.render===false));
+ const call=scene.calls.find(call=>call.type==="Token");assert.equal(call.options.animate,true);assert.equal(call.options.animation.duration,200);
+});
+test("drag animation retains its remaining duration across subsequent floor ticks",async()=>{
+ const {c,scene}=setup(),t=token(scene),change={x:750};
+ c.intercept(t,change,{animation:{duration:1000}});apply(t,change);await c.tick();
+ assert.equal(scene.calls.find(call=>call.type==="Token").options.animation.duration,1000);
+ assert.equal(t.getFlag(ID,"ride").animationUntil,2000);
+ scene.calls=[];game.time.serverTime+=200;await c.tick();
+ assert.equal(scene.calls.find(call=>call.type==="Token").options.animation.duration,800);
+ game.time.serverTime=2200;scene.calls=[];await c.tick();
+ assert.equal(t.getFlag(ID,"ride").animationUntil,undefined);
+ assert.equal(scene.calls.find(call=>call.type==="Token").options.animation.duration,200);
+});
+test("explicit nonanimated movement is respected",async()=>{
+ const {c,scene}=setup(),t=token(scene),change={x:750};c.intercept(t,change,{animate:false});apply(t,change);await c.tick();
+ assert.equal(scene.calls.find(call=>call.type==="Token").options.animate,false);
+});
+test("selected tile still receives smooth frame rendering",()=>{
+ const {c,scene}=setup(),t=scene.tiles.get("t1");t.object={controlled:true,mesh:{rotation:0}};t.flags[ID]={motion:{angle:10,velocity:1,at:800}};
+ c.draw();assert.ok(Math.abs(t.object.mesh.rotation-10.2*Math.PI/180)<.00001);
+});

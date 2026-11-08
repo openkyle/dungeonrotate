@@ -1,5 +1,6 @@
-import {rasterize, boundaries, createMaskRaster} from "./core.js";
-export async function readMask(path, resolution, threshold) {
+import {rasterize, createMaskRaster} from "./core.js";
+import {smoothBoundaries} from "./contours.js";
+export async function readMask(path, resolution, threshold, smoothing = 1) {
   path = String(path ?? "").trim();
   if (!path) throw Error("No wall mask is selected. Browse / Upload a black-and-white image, or leave the field empty to rotate without walls.");
   const image = new Image();
@@ -34,7 +35,7 @@ export async function readMask(path, resolution, threshold) {
     }
   } finally { surface.width = 1; surface.height = 1; }
   const mask = raster.finish();
-  const segments = boundaries(mask);
+  const segments = smoothBoundaries(mask, smoothing);
   if (!segments.length) throw Error("Mask has no solid pixels. Black is solid; white and transparent pixels are open.");
   if (segments.length > 1200) throw Error(`Mask produces ${segments.length} walls (limit 1200 per tile). Lower resolution or simplify the source mask image.`);
   return {mask, segments, sourceWidth, sourceHeight};

@@ -58,3 +58,13 @@ Foundry's global game pause freezes the rotating floors too. The floating panel 
 If the panel shows **Engine stopped**, read the displayed error, resolve the cause, and use **Resume engine**. The controlling GM must remain on this scene. If the game is unpaused but motion still fails, run `game.modules.get("rotating-dungeon").api.diagnostics()` in the browser console and share the result. Run it again after ten seconds to compare the rotation and last-update clock.
 
 Automatic mask discovery lists the tile's storage folder through Foundry's file picker, including its configured hosting provider. It selects only a matching file in that folder. Hosts without folder-listing access require **Browse / Upload**; the module does not download guessed missing filenames.
+
+## Smoother walls and movement
+
+Select **Wall smoothing → Balanced** (default), then **Save & apply masks** to replace the existing generated walls. **Strong** averages more of the small bumps; **Light** retains more detail; **Off** restores exact pixel edges. For your existing scene, set **Advanced settings → Mask resolution → 256 pixels** before saving. New slots already default to 256. Native Foundry walls are straight segments, so curves are represented by a closed sequence of short diagonal walls.
+
+Smoothing can shift an edge by a few processing pixels. Inspect narrow doors and thin partitions; use Light or Off if a small feature needs exact tracing. Destination occupancy still uses the conservative raster. Smoothing does not modify the mask image.
+
+Under **Performance**, keep **Smooth tile and token motion** enabled. Selected tiles now animate too, and tokens glide between rotation updates. Drag animation is retained across those updates. Explicit nonanimated moves are respected. Wall/vision and scene-light geometry still update at the selected frequency; try 10 updates/second if the vision edge steps noticeably and your group’s performance allows it.
+
+Rotation no longer refreshes sheets each tick. Unsaved Settings inputs remain in place until you save or close the form.

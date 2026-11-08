@@ -80,7 +80,8 @@ export class RotationController {
     const tile = scene.tiles.get(s.tileId);
     // Persist an owner-authorized intent, not competing world coordinates. No custom socket trust.
     change[`flags.${ID}.request`] = {id: foundry.utils.randomID(), slotId: s.id,
-      local: toLocal(target, tile), at: game.time.serverTime, userId: game.user.id};
+      local: toLocal(target, tile), at: game.time.serverTime, userId: game.user.id,
+      animate: options.animate !== false, duration: Number.isFinite(options.animation?.duration) ? Math.max(0, Math.min(10000, options.animation.duration)) : null};
     delete change.x; delete change.y;
   }
   async tick() {
@@ -109,9 +110,9 @@ export class RotationController {
       }
     }
     // Foundry has no cross-document transaction. Walls first, then token positions, then tile clock.
-    if (wallUpdates.length) await scene.updateEmbeddedDocuments("Wall", wallUpdates, {[ID]: true});
+    if (wallUpdates.length) await scene.updateEmbeddedDocuments("Wall", wallUpdates, {[ID]: true, render: false});
     if (canvas.scene?.id !== scene.id || this.authority(scene)?.id !== game.user.id) return;
-    const tokenUpdates = [];
+    const tokenUpdates = new Map();
     for (const token of scene.tokens) {
       if (token.getFlag(ID, "attachment") === "none") continue;
       const f = token.flags[ID] ?? {}, center = this.center(token, scene);
@@ -120,6 +121,8 @@ export class RotationController {
       const tile = scene.tiles.get(slot.tileId), angle = angles.get(slot.id);
       let local = f.ride?.slotId === slot.id ? f.ride.local : toLocal(center, tile);
       if (!Array.isArray(local) || local.length !== 2 || !local.every(Number.isFinite)) local = toLocal(center, tile);
+      let animationUntil = Number.isFinite(f.ride?.animationUntil) && f.ride.animationUntil > now ? f.ride.animationUntil : 0;
+      let explicitInstant = false;
       let destination = toWorld(local, tile, angle);
       const update = {_id: token.id};
       const request = f.request;
@@ -136,7 +139,13 @@ export class RotationController {
           const blocked = !token.object || token.object.checkCollision(point(target), {origin: point(destination), type: "move", mode: "any"});
           const bounds = scene.dimensions;
           const insideScene = target[0] >= bounds.sceneX && target[1] >= bounds.sceneY && target[0] < bounds.sceneX + bounds.sceneWidth && target[1] < bounds.sceneY + bounds.sceneHeight;
-          if (!inSolid && !blocked && insideScene) { local = request.local; destination = target; }
+          if (!inSolid && !blocked && insideScene) {
+            const distance = Math.hypot(target[0]-destination[0],target[1]-destination[1]);
+            const duration = Number.isFinite(request.duration) ? Math.max(0,Math.min(10000,request.duration)) : Math.min(10000,distance/scene.grid.size/6*1000);
+            explicitInstant = request.animate === false;
+            animationUntil = explicitInstant ? 0 : now + duration;
+            local = request.local; destination = target;
+          }
           else update[`flags.${ID}.rejected`] = request.id;
         } else update[`flags.${ID}.rejected`] = request.id;
       }
@@ -144,19 +153,26 @@ export class RotationController {
         slot = this.pick(scene, state, destination, angles);
         local = slot ? toLocal(destination, scene.tiles.get(slot.tileId), angles.get(slot.id)) : null;
       }
-      const ride = slot ? {slotId: slot.id, local} : null;
+      const ride = slot ? {slotId: slot.id, local, ...(animationUntil ? {animationUntil} : {})} : null;
       if (JSON.stringify(ride) !== JSON.stringify(f.ride ?? null)) update[`flags.${ID}.ride`] = ride;
       const x = Math.round(destination[0] - token.width * scene.grid.size / 2), y = Math.round(destination[1] - token.height * scene.grid.size / 2);
       if (Math.abs(x - token.x) > .001) update.x = x;
       if (Math.abs(y - token.y) > .001) update.y = y;
-      if (Object.keys(update).length > 1) tokenUpdates.push(update);
+      if (Object.keys(update).length > 1) {
+        // Keep a drag's remaining animation time through subsequent carry updates.
+        const duration = explicitInstant ? 0 : Math.max(animationUntil-now, state.smooth ? 1000/state.hz : 0, 0);
+        const key = Math.round(duration);
+        if (!tokenUpdates.has(key)) tokenUpdates.set(key, []);
+        tokenUpdates.get(key).push(update);
+      }
     }
-    if (tokenUpdates.length) await scene.updateEmbeddedDocuments("Token", tokenUpdates, {[ID]: true, animate: false});
+    for (const [duration, updates] of tokenUpdates) await scene.updateEmbeddedDocuments("Token", updates,
+      {[ID]: true, render: false, animate: duration > 0, animation: {duration}});
     const noteUpdates = this.noteUpdates(scene, state, slots, angles, now);
-    if (noteUpdates.length) await scene.updateEmbeddedDocuments("Note", noteUpdates, {[ID]: true});
+    if (noteUpdates.length) await scene.updateEmbeddedDocuments("Note", noteUpdates, {[ID]: true, render: false});
     const lightUpdates = this.anchoredUpdates(scene, state, angles, now, "AmbientLight");
-    if (lightUpdates.length) await scene.updateEmbeddedDocuments("AmbientLight", lightUpdates, {[ID]: true});
-    if (tileUpdates.length) await scene.updateEmbeddedDocuments("Tile", tileUpdates, {[ID]: true});
+    if (lightUpdates.length) await scene.updateEmbeddedDocuments("AmbientLight", lightUpdates, {[ID]: true, render: false});
+    if (tileUpdates.length) await scene.updateEmbeddedDocuments("Tile", tileUpdates, {[ID]: true, render: false});
   }
   interceptNote(note, change, options) { return this.interceptAnchored(note, change, options, "Note"); }
   interceptLight(light, change, options) { return this.interceptAnchored(light, change, options, "AmbientLight"); }
@@ -228,7 +244,7 @@ export class RotationController {
     if (!state) return;
     for (const s of this.slots(canvas.scene, state)) {
       const tile = canvas.scene.tiles.get(s.tileId), mesh = tile.object?.mesh;
-      if (!mesh || tile.object.controlled) continue;
+      if (!mesh || tile.object?._preview) continue;
       const moving = this.enabled() && state.smooth && s.running && !game.paused && authority;
       const angle = moving ? visualAngle(tile.getFlag(ID, "motion"), game.time.serverTime, state.hz) : tile.rotation;
       mesh.rotation = (angle ?? tile.rotation) * Math.PI / 180;
@@ -255,7 +271,7 @@ export class RotationController {
         if (slot.footprint === "artwork") slot.floor = await this.readFloor(tile.texture?.src);
         if (!slot.maskPath) continue;
         let result;
-        try { result = await this.readMask(slot.maskPath, slot.resolution, slot.threshold); }
+        try { result = await this.readMask(slot.maskPath, slot.resolution, slot.threshold, slot.wallSmoothing ?? 1); }
         catch (error) {
           const filename = slot.maskPath.split("/").pop().split(/[?#]/)[0];
           throw Error(`Slot ${slot.id.toUpperCase()} — ${filename}: ${error.message}`);
@@ -268,9 +284,9 @@ export class RotationController {
       const snapshots = oldWalls.map(w => w.toObject());
       let created = [];
       try {
-        if (data.length) created = await scene.createEmbeddedDocuments("Wall", data, {[ID]: true});
+        if (data.length) created = await scene.createEmbeddedDocuments("Wall", data, {[ID]: true, render: false});
         await scene.setFlag(ID, "state", prepared);
-        if (oldWalls.length) await scene.deleteEmbeddedDocuments("Wall", oldWalls.map(w => w.id), {[ID]: true});
+        if (oldWalls.length) await scene.deleteEmbeddedDocuments("Wall", oldWalls.map(w => w.id), {[ID]: true, render: false});
         await this.clearRiders(scene);
         this.last = game.time.serverTime;
       } catch (error) {
@@ -279,7 +295,7 @@ export class RotationController {
           if (missing.length) await scene.createEmbeddedDocuments("Wall", missing, {[ID]: true, keepId: true});
           await scene.setFlag(ID, "state", previous);
           const ids = created.filter(w => scene.walls.has(w.id)).map(w => w.id);
-          if (ids.length) await scene.deleteEmbeddedDocuments("Wall", ids, {[ID]: true});
+          if (ids.length) await scene.deleteEmbeddedDocuments("Wall", ids, {[ID]: true, render: false});
         } catch (rollbackError) {
           this.failure = true; this.lastError = error.message;
         this.onStatusChange?.();
@@ -294,13 +310,13 @@ export class RotationController {
   async clearRiders(scene, slotId = null) {
     const updates = scene.tokens.filter(t => !slotId || t.getFlag(ID, "ride")?.slotId === slotId).map(t => ({_id: t.id,
       [`flags.${ID}.ride`]: null, [`flags.${ID}.ack`]: t.getFlag(ID, "request")?.id ?? null}));
-    if (updates.length) await scene.updateEmbeddedDocuments("Token", updates, {[ID]: true});
+    if (updates.length) await scene.updateEmbeddedDocuments("Token", updates, {[ID]: true, render: false});
     const notes = scene.notes.filter(n => !slotId || n.getFlag(ID, "ride")?.slotId === slotId).map(n => ({_id: n.id,
       [`flags.${ID}.ride`]: null, [`flags.${ID}.ack`]: n.getFlag(ID, "request")?.id ?? null}));
-    if (notes.length) await scene.updateEmbeddedDocuments("Note", notes, {[ID]: true});
+    if (notes.length) await scene.updateEmbeddedDocuments("Note", notes, {[ID]: true, render: false});
     const lights = scene.lights.filter(n => !slotId || n.getFlag(ID, "ride")?.slotId === slotId).map(n => ({_id: n.id,
       [`flags.${ID}.ride`]: null, [`flags.${ID}.ack`]: n.getFlag(ID, "request")?.id ?? null}));
-    if (lights.length) await scene.updateEmbeddedDocuments("AmbientLight", lights, {[ID]: true});
+    if (lights.length) await scene.updateEmbeddedDocuments("AmbientLight", lights, {[ID]: true, render: false});
   }
   async control(scene, slotId, action) {
     return this.serial(async () => {
@@ -317,7 +333,7 @@ export class RotationController {
       else if (action === "reverse") s.direction *= -1;
       else throw Error("Unknown rotation action.");
       await scene.setFlag(ID, "state", state);
-      await tile.update({[`flags.${ID}.motion`]: {angle: tile.rotation, velocity: s.running && !game.paused ? s.speed * s.direction : 0, at: game.time.serverTime}}, {[ID]: true});
+      await tile.update({[`flags.${ID}.motion`]: {angle: tile.rotation, velocity: s.running && !game.paused ? s.speed * s.direction : 0, at: game.time.serverTime}}, {[ID]: true, render: false});
       this.last = game.time.serverTime;
       if (action === "start" && game.paused) ui.notifications.warn("Rotation is armed, but Foundry is paused. Press Space to unpause the game and begin rotation.");
     });
@@ -329,7 +345,7 @@ export class RotationController {
       if (!tile || s.running) throw Error("Select a tile and pause this slot before generating walls.");
       validateState(state, scene.tiles);
       if (scene.walls.some(w => w.getFlag(ID, "wall")?.slotId === slotId)) throw Error("Remove this slot's existing generated walls first.");
-      const {mask, segments} = await readMask(s.maskPath, s.resolution, s.threshold);
+      const {mask, segments} = await readMask(s.maskPath, s.resolution, s.threshold, s.wallSmoothing ?? 1);
       this.assertGM(scene);
       const data = segments.map(segment => ({c: wallCoordinates(segment, tile, tile.rotation),
         move: s.collision ? CONST.WALL_MOVEMENT_TYPES.NORMAL : CONST.WALL_MOVEMENT_TYPES.NONE,
@@ -337,9 +353,9 @@ export class RotationController {
         light: s.vision ? CONST.WALL_SENSE_TYPES.NORMAL : CONST.WALL_SENSE_TYPES.NONE,
         sound: CONST.WALL_SENSE_TYPES.NONE, door: CONST.WALL_DOOR_TYPES.NONE,
         flags: {[ID]: {wall: {slotId, tileId: tile.id, segment}}}}));
-      const created = await scene.createEmbeddedDocuments("Wall", data, {[ID]: true});
+      const created = await scene.createEmbeddedDocuments("Wall", data, {[ID]: true, render: false});
       try { s.mask = mask; await scene.setFlag(ID, "state", state); }
-      catch (error) { await scene.deleteEmbeddedDocuments("Wall", created.map(w => w.id), {[ID]: true}); throw error; }
+      catch (error) { await scene.deleteEmbeddedDocuments("Wall", created.map(w => w.id), {[ID]: true, render: false}); throw error; }
       return created.length;
     });
   }
@@ -349,7 +365,7 @@ export class RotationController {
       const state = this.state(scene), s = state.slots.find(s => s.id === slotId);
       if (s.running) throw Error("Pause this slot before removing walls.");
       const ids = scene.walls.filter(w => w.getFlag(ID, "wall")?.slotId === slotId).map(w => w.id);
-      if (ids.length) await scene.deleteEmbeddedDocuments("Wall", ids, {[ID]: true});
+      if (ids.length) await scene.deleteEmbeddedDocuments("Wall", ids, {[ID]: true, render: false});
       s.mask = null;
       await scene.setFlag(ID, "state", state);
       await this.clearRiders(scene, slotId);

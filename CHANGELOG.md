@@ -1,3 +1,13 @@
+# 0.1.0-rc.5
+
+- Added Light, Balanced, Strong, and Off wall smoothing. Traces closed outlines, averages small edge details by arc length, then fits diagonal wall segments. Preserves small rectangular barriers and contact points; rejects collapsed/inverted contours and falls back to exact boundaries on crossing geometry.
+- New slots default to 256-pixel mask resolution. Existing scenes retain their resolution; select 256 and Save & apply masks to rebuild finer walls. Existing walls do not change until saved.
+- Supplied mask-screenshot browser preview: 1,158 exact wall segments, 335 Balanced, 259 Strong. No user artwork is included in the release.
+- Smooth tile animation now also runs for selected tiles and is scheduled before canvas rendering. Carried tokens use native animation between document updates. Drag movement keeps its animation deadline through subsequent rotation updates instead of snapping; explicit nonanimated moves remain supported.
+- Rotation updates use render:false to avoid repeatedly redrawing sheets. Floating controls refresh only for configuration/name changes, and settings retain unsaved input through external render requests.
+- User confirmed the earlier Start issue was Foundry's global game pause. rc.4 pause/status feedback remains included.
+- 81 automated tests pass, including contour closure/door openings, slow rotation, drag animation deadlines, and draft preservation. Native-browser contour preview verified; live multiplayer animation/third-party compatibility still needs user validation. Walls and scene-light geometry continue updating at the configured frequency rather than every display frame.
+
 # 0.1.0-rc.4
 
 - Replaced guessed mask-image downloads with one storage-provider folder listing. Auto-discovery no longer issues GET requests for nonexistent `_mask` variants. If a folder cannot be listed, select the mask with Browse / Upload.

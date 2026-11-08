@@ -30,9 +30,11 @@ Scene-view authority election is deterministic but not a server-side lock. Two b
 
 ## Rendering and limits
 
-Only the tile mesh is extrapolated. The read-only draw path does not deep-copy mask data or update Documents. Tokens/pins/lights/walls remain at their committed sample to keep native picking, vision, and movement on the same geometry. This favors correctness at sampled instants over claiming a continuously synchronized physics renderer. Pausing snaps any artwork extrapolation back to committed geometry.
+Tile artwork extrapolates from a shared motion clock on each client. Selected tiles participate; active previews are excluded. Native token animation interpolates carry updates over one geometry interval. Accepted drag requests retain an animation deadline in the ride flag, so subsequent rotation updates use the remaining duration rather than ending the drag animation early. Caller-supplied animation durations are bounded to ten seconds; otherwise duration is based on six grid squares per second. Authoritative positions, collision tests, walls, notes, and scene lights still commit at the configured rate. Rendering between those samples is visual interpolation, not continuously updated wall geometry.
 
-Masks use conservative occupancy reduction and exact merged orthogonal boundary runs. Jagged source walls remain stair-stepped; there is no topology-changing polygon simplifier. Generation has a segment cap and rolls back created walls if storing the raster state fails. A whole-image black mask forms an enclosed solid area; token destination occupancy prevents placement inside it through module-managed movement.
+Masks retain conservative occupancy reduction for destination collision checks. Wall outlines can be averaged and simplified separately: directed contours preserve orientation around holes, uniform edge samples avoid bias from corner density, cyclic averaging removes small details, and closed polyline fitting reduces wall count. Small rectangles and contact junctions are protected; collapse, winding reversal, and crossing checks fall back to exact geometry. Smoothing approximates the outline and can shift wall placement by a few raster cells. It is not a guarantee of identical per-pixel occupancy; use Light/Off and higher resolution for narrow features. Generation still has a 1,200-segment cap per tile and configuration rollback.
+
+Runtime document writes suppress sheet rendering. The floating panel only reacts to scene configuration/name changes, and a dirty settings form declines unsolicited renders until a successful save.
 
 ## API references
 
@@ -49,7 +51,7 @@ Implementation targets Foundry's published v11 interfaces:
 
 ## Setup and targeting in rc.2
 
-A single TileTargetSession registers a one-shot controlTile hook after activating/releasing the Tiles layer. It filters by scene, cleans up listeners on pick/cancel, and cancels on Escape, canvas teardown, replacement by another session, or a one-minute timeout. Settings targeting fills the current form; floating targeting applies the selection immediately. Matching-mask lookup probes only conventional names in the chosen image directory. Asynchronous settings lookups use a revision counter so an older result cannot overwrite a newer selection.
+A single TileTargetSession registers a one-shot controlTile hook after activating/releasing the Tiles layer. It filters by scene, cleans up listeners on pick/cancel, and cancels on Escape, canvas teardown, replacement by another session, or a one-minute timeout. Settings targeting fills the current form; floating targeting applies the selection immediately. Matching-mask lookup lists the configured provider directory and compares conventional names without requesting missing images. Asynchronous settings lookups use a revision counter so an older result cannot overwrite a newer selection.
 
 Configure stages every image before writing documents, creates replacement walls, persists state, deletes only prior managed walls, and resets rider anchors. Failures restore prior state and missing old walls, then delete staged replacements. A rollback failure stops the engine. Native cross-document atomicity is still unavailable. Image pixels are browser-decoded; masks need not have a PNG extension. Native FilePicker is opened explicitly from the visible Browse / Upload button.
 
