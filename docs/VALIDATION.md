@@ -2,7 +2,7 @@
 
 ## Completed locally
 
-- 63 automated Node tests: geometry transforms, opposite rotations, normalized boundaries, conservative mask reduction, holes/islands, alpha handling, radial bands, configuration validation, drift-free local anchors, ownership checks, stale requests, serialization, queued-movement races, native-collision delegation, global/slot pause, journal-pin movement/link retention, opt-outs, overlap precedence, owned-wall cleanup, scene opt-in and disabled movement, floating-panel data, light positioning/cone rotation, manual light changes, and preservation of illumination settings.
+- 65 automated Node tests: geometry transforms, opposite rotations, normalized boundaries, conservative mask reduction, holes/islands, alpha handling, radial bands, configuration validation, drift-free local anchors, ownership checks, stale requests, serialization, queued-movement races, native-collision delegation, global/slot pause, journal-pin movement/link retention, opt-outs, overlap precedence, owned-wall cleanup, scene opt-in and disabled movement, floating-panel data, light positioning/cone rotation, manual light changes, and preservation of illumination settings.
 - JavaScript syntax checks for all seven module source files.
 - Release packaging and archive integrity checks.
 
@@ -52,3 +52,9 @@ Use a copy of a scene with two non-overhead, unmirrored tiles. `tests/fixtures/m
 ## Publication status
 
 The source and installer are prepared for publication in **openkyle/dungeonrotate** as an explicitly labeled **release candidate**. A stable compatibility claim remains gated on the live checks above. The local build process does not publish; release assets are uploaded separately to GitHub.
+
+## rc.3 large-mask verification
+
+- Node regression: 5000 × 4000 synthetic image exceeds the old cap, is read in chunks no larger than 262,144 pixels, preserves the far-edge black pixel, clears every scratch chunk, and releases the canvas.
+- Chunked occupancy equals whole-image reduction across uneven boundaries with mixed transparency and one-pixel lines.
+- Native browser harness: a real 5000 × 4000 PNG decoded and converted successfully in 190 ms on the development browser, producing an expected 128 × 103 occupancy grid and eight wall segments. A one-pixel line, far-edge pixel, and transparent chunk were checked. This timing is a single local measurement, not a Foundry performance guarantee. The user's actual Forge mask has not been fetched or tested here.

@@ -1,3 +1,10 @@
+# 0.1.0-rc.3
+
+- Removed the 16-megapixel mask rejection. Large images are processed automatically in bounded 1024 × 256 pixel scratch chunks, without allocating a full-size RGBA canvas buffer.
+- Preserves every opaque dark source pixel during conservative reduction, including thin walls and pixels across chunk edges. Clears scratch chunks to avoid transparent pixels inheriting earlier geometry.
+- Yields between chunk batches to keep the browser responsive and releases the scratch canvas afterward.
+- 65 automated tests pass. A native-browser 5000 × 4000 (20 MP) mask passed conversion with thin-wall, far-edge, and transparency checks. Live Foundry multiplayer validation remains pending.
+
 # 0.1.0-rc.2
 
 - Compact, resizable, vertically scrolling settings; Browse / Upload remains visible even with long tile filenames.

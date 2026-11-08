@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {normalize, rotate, toLocal, toWorld, defaultState, validateState, rasterize, boundaries, solidAt, wallCoordinates, visualAngle, onFloor, parseBands} from "../scripts/core.js";
+import {normalize, rotate, toLocal, toWorld, defaultState, validateState, rasterize, boundaries, solidAt, wallCoordinates, visualAngle, onFloor, parseBands, createMaskRaster} from "../scripts/core.js";
 const near = (a,b) => assert.ok(Math.abs(a-b) < 1e-8, `${a} != ${b}`);
 const tile = {x: 100, y: 200, width: 400, height: 200, rotation: 270};
 function bitmap(rows) {
@@ -63,4 +63,19 @@ test("radial footprint supports disconnected inner and outer rings", () => {
 });
 test("malformed or reversed radial intervals rejected", () => {
   for(const s of ["", "0.5-0.2", "0-2", "NaN-1", "-1-1"]) assert.throws(()=>parseBands(s),/Radial bands/);
+});
+
+test("chunked rasterization matches full-image reduction across chunk boundaries",()=>{
+ const w=37,h=29,pixels=new Uint8ClampedArray(w*h*4);
+ for(let y=0;y<h;y++)for(let x=0;x<w;x++) {
+  const v=(x===10||y===7||((x*17+y*31)%23===0))?0:255;
+  pixels.set([v,v,v,(x+y)%13===0?0:255],(y*w+x)*4);
+ }
+ const expected=rasterize(pixels,w,h,16,128),raster=createMaskRaster(w,h,16,128);
+ for(let y=0;y<h;y+=7)for(let x=0;x<w;x+=10){
+  const cw=Math.min(10,w-x),ch=Math.min(7,h-y),chunk=new Uint8ClampedArray(cw*ch*4);
+  for(let row=0;row<ch;row++)chunk.set(pixels.subarray(((y+row)*w+x)*4,((y+row)*w+x+cw)*4),row*cw*4);
+  raster.add(chunk,x,y,cw,ch);
+ }
+ assert.deepEqual(raster.finish(),expected);
 });

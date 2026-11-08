@@ -1,4 +1,4 @@
-import {rasterize, boundaries} from "./core.js";
+import {rasterize, boundaries, createMaskRaster} from "./core.js";
 export async function readMask(path, resolution, threshold) {
   path = String(path ?? "").trim();
   if (!path) throw Error("No wall mask is selected. Browse / Upload a black-and-white image, or leave the field empty to rotate without walls.");
@@ -10,19 +10,34 @@ export async function readMask(path, resolution, threshold) {
     image.onerror = () => { clearTimeout(timer); reject(Error("Cannot load this wall-mask image. Check that its URL points to an image you can open, or use Browse / Upload.")); };
     image.src = path;
   });
-  if (image.naturalWidth * image.naturalHeight > 16777216) throw Error("Mask exceeds 16 megapixels. Resize the source mask image first.");
+  const sourceWidth = image.naturalWidth, sourceHeight = image.naturalHeight;
+  const raster = createMaskRaster(sourceWidth, sourceHeight, resolution, threshold);
+  // Decode only small source rectangles into a scratch canvas. Scan every source pixel,
+  // so resizing never drops thin black walls or blends them into white space.
   const surface = document.createElement("canvas");
-  surface.width = image.naturalWidth; surface.height = image.naturalHeight;
+  surface.width = Math.min(1024, sourceWidth); surface.height = Math.min(256, sourceHeight);
   const ctx = surface.getContext("2d", {willReadFrequently: true});
-  ctx.drawImage(image, 0, 0);
-  let pixels;
-  try { pixels = ctx.getImageData(0, 0, surface.width, surface.height).data; }
-  catch { throw Error("Mask pixels cannot be read. Upload the mask image to Foundry storage instead of a cross-origin image host."); }
-  const mask = rasterize(pixels, surface.width, surface.height, resolution, threshold);
+  if (!ctx) throw Error("The browser could not create a mask-processing canvas.");
+  let chunks = 0;
+  try {
+    for (let y = 0; y < sourceHeight; y += 256) {
+      for (let x = 0; x < sourceWidth; x += 1024) {
+        const width = Math.min(1024, sourceWidth - x), height = Math.min(256, sourceHeight - y);
+        ctx.clearRect(0, 0, surface.width, surface.height);
+        ctx.drawImage(image, x, y, width, height, 0, 0, width, height);
+        let pixels;
+        try { pixels = ctx.getImageData(0, 0, width, height).data; }
+        catch { throw Error("Mask pixels cannot be read. Upload the mask image to Foundry storage instead of a cross-origin image host."); }
+        raster.add(pixels, x, y, width, height);
+        if (++chunks % 4 === 0) await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
+  } finally { surface.width = 1; surface.height = 1; }
+  const mask = raster.finish();
   const segments = boundaries(mask);
   if (!segments.length) throw Error("Mask has no solid pixels. Black is solid; white and transparent pixels are open.");
   if (segments.length > 1200) throw Error(`Mask produces ${segments.length} walls (limit 1200 per tile). Lower resolution or simplify the source mask image.`);
-  return {mask, segments, sourceWidth: surface.width, sourceHeight: surface.height};
+  return {mask, segments, sourceWidth, sourceHeight};
 }
 
 /** Filename convention only; never probes another host or directory. */

@@ -44,28 +44,44 @@ export function validateState(state, tiles) {
   return state;
 }
 /** Conservative reduction: a cell is solid if ANY opaque dark source pixel is solid. */
-export function rasterize(rgba, width, height, resolution, threshold) {
-  if (!width || !height || rgba.length !== width * height * 4) throw Error("Invalid mask pixel data.");
+export function createMaskRaster(width, height, resolution, threshold) {
+  if (!Number.isInteger(width) || width < 1 || !Number.isInteger(height) || height < 1) throw Error("Invalid mask dimensions.");
   const scale = Math.min(1, resolution / Math.max(width, height));
   const w = Math.max(1, Math.ceil(width * scale)), h = Math.max(1, Math.ceil(height * scale));
   const cells = new Uint8Array(w * h);
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-    const i = (y * width + x) * 4;
-    const luma = .2126 * rgba[i] + .7152 * rgba[i + 1] + .0722 * rgba[i + 2];
-    if (rgba[i + 3] >= 128 && luma < threshold) cells[Math.floor(y * h / height) * w + Math.floor(x * w / width)] = 1;
-  }
-  const runs = [];
-  for (let y = 0; y < h; y++) {
-    const row = [];
-    for (let x = 0; x < w;) {
-      if (!cells[y * w + x]) { x++; continue; }
-      const start = x;
-      while (x < w && cells[y * w + x]) x++;
-      row.push(start, x);
+  return {
+    add(rgba, x0, y0, chunkWidth, chunkHeight) {
+      if (rgba.length !== chunkWidth * chunkHeight * 4 || x0 < 0 || y0 < 0 || x0 + chunkWidth > width || y0 + chunkHeight > height) throw Error("Invalid mask pixel chunk.");
+      for (let y = 0; y < chunkHeight; y++) {
+        const row = Math.floor((y0 + y) * h / height) * w;
+        for (let x = 0; x < chunkWidth; x++) {
+          const i = (y * chunkWidth + x) * 4;
+          if (rgba[i + 3] < 128) continue;
+          if (.2126 * rgba[i] + .7152 * rgba[i + 1] + .0722 * rgba[i + 2] < threshold)
+            cells[row + Math.floor((x0 + x) * w / width)] = 1;
+        }
+      }
+    },
+    finish() {
+      const runs = [];
+      for (let y = 0; y < h; y++) {
+        const row = [];
+        for (let x = 0; x < w;) {
+          if (!cells[y * w + x]) { x++; continue; }
+          const start = x;
+          while (x < w && cells[y * w + x]) x++;
+          row.push(start, x);
+        }
+        runs.push(row);
+      }
+      return {w, h, runs};
     }
-    runs.push(row);
-  }
-  return {w, h, runs};
+  };
+}
+export function rasterize(rgba, width, height, resolution, threshold) {
+  const raster = createMaskRaster(width, height, resolution, threshold);
+  raster.add(rgba, 0, 0, width, height);
+  return raster.finish();
 }
 export function solidCell(mask, x, y) {
   if (!mask || x < 0 || y < 0 || x >= mask.w || y >= mask.h) return false;

@@ -29,6 +29,8 @@ Choose a tile and mask image, then click **Save & apply masks**. There are no Ge
 
 Saving also refreshes an image edited at the same path. All masks are checked before scene changes begin. An unreadable or overly complex mask leaves the previous setup intact. You can save while rotating: processing briefly holds the update loop, then unchanged tile assignments resume their prior running state. A newly assigned tile stays paused.
 
+Large masks are processed automatically in small chunks; you do not need to resize them to satisfy a 16-megapixel limit. Thin black source pixels are preserved in the reduced wall grid. Very large images must still be decodable by your browser.
+
 Black is solid; white or transparent is open. Match the mask to the **unrotated tile image**, including transparent padding. The existing tile rotation is applied automatically. Walls block vision, light, and movement by default. A tile with no mask can rotate without generated walls.
 
 ## Journal pins, lights, and tokens

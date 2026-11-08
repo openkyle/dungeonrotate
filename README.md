@@ -1,6 +1,6 @@
 # Rotating Dungeon — Tiles & Mask Walls
 
-Foundry VTT **v11**, targeted at build **315**. Version **0.1.0-rc.2** is a release candidate. The requested D&D5e 2.4.1 / Forge environment still needs live validation.
+Foundry VTT **v11**, targeted at build **315**. Version **0.1.0-rc.3** is a release candidate. The requested D&D5e 2.4.1 / Forge environment still needs live validation.
 
 ## Install or update
 
@@ -31,7 +31,7 @@ Masks must match the unrotated artwork rectangle and padding. The selected tile 
 
 Saving automatically builds/replaces managed walls; clearing the mask and saving removes that slot’s managed walls. Hand-drawn walls remain untouched. A tile without a mask may rotate without generated walls. No Generate/Remove buttons or start/pause controls clutter Settings.
 
-Masks are conservatively downsampled to 64/128/256 cells and exact orthogonal boundary runs are merged without removing holes. Sources are limited to 16 megapixels and 1,200 segments per tile. Lower resolution or simplify a detailed mask if needed. Mask generation errors identify the slot and file; images are validated before scene writes and failed writes attempt to restore the previous managed-wall setup.
+Masks are conservatively downsampled to 64/128/256 cells and exact orthogonal boundary runs are merged without removing holes. Large source masks are scanned automatically in 1024 × 256 pixel chunks; there is no module-imposed 16-megapixel limit. Scratch RGBA reads are at most 1 MiB, although the browser still needs memory to decode the original image. The generated geometry limit remains 1,200 segments per tile. Lower resolution or simplify a detailed mask if needed. Mask generation errors identify the slot and file; images are validated before scene writes and failed writes attempt to restore the previous managed-wall setup.
 
 ## Automatic scene riders
 
