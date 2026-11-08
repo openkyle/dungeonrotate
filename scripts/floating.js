@@ -1,3 +1,5 @@
+import {TileTargetSession} from "./target.js";
+import {findMatchingMask} from "./mask.js";
 import {ID} from "./core.js";
 
 export function addSceneToggle(app, html) {
@@ -30,6 +32,7 @@ export function createFloatingClass(controller, openSettings) {
           toggle: s.running ? "pause" : "start", toggleText: s.running ? "Pause" : "Start"
         }))};
     }
+    async close(options) { this.targetSession?.finish(); return super.close(options); }
     activateListeners(html) {
       super.activateListeners(html);
       html.find("[data-action]").on("click", async event => {
@@ -39,12 +42,28 @@ export function createFloatingClass(controller, openSettings) {
           if (action === "settings") { openSettings(); return; }
           const scene = canvas.scene;
           controller.assertGM(scene);
-          if (action === "pauseAll") {
+          if (action === "help") { controller.openHelp(); return; }
+          if (action === "target") {
+            await this.minimize();
+            this.targetSession = new TileTargetSession(scene.id, async tile => {
+              await this.maximize();
+              const mask = await findMatchingMask(tile.texture.src);
+              const state = controller.state(scene), selected = state.slots.find(s => s.id === slot);
+              if (selected.tileId !== tile.id) selected.maskPath = mask;
+              else if (!selected.maskPath && mask) selected.maskPath = mask;
+              selected.tileId = tile.id;
+              selected.footprint = selected.footprint === "radial" ? "radial" : "artwork";
+              const count = await controller.configure(scene, state);
+              ui.notifications.info(`Slot ${slot.toUpperCase()}: ${tile.id}. ${count} scene mask walls applied.${mask ? " Matching mask found." : " No matching mask; use Settings to browse."}`);
+              this.render(false);
+            }, () => { if (this.rendered) this.maximize(); }).start();
+          }
+          else if (action === "pauseAll") {
             for (const s of controller.slots(scene)) await controller.control(scene, s.id, "pause");
           } else if (action === "resume") { controller.failure = false; controller.last = 0; }
           else await controller.control(scene, slot, action);
         } catch (error) { ui.notifications.error(error.message); }
-        finally { button.disabled = false; this.render(false); }
+        finally { button.disabled = false; if (action !== "target") this.render(false); }
       });
     }
   };

@@ -1,78 +1,80 @@
 import {ID} from "./core.js";
+import {findMatchingMask} from "./mask.js";
+import {TileTargetSession} from "./target.js";
 export function createPanelClass(controller) {
   return class RotationPanel extends FormApplication {
     static get defaultOptions() {
       return foundry.utils.mergeObject(super.defaultOptions, {id: "rotating-dungeon-panel", title: "Rotating Dungeon",
-        template: `modules/${ID}/templates/panel.hbs`, width: 650, height: "auto", closeOnSubmit: false, classes: ["rotating-dungeon"]});
+        template: `modules/${ID}/templates/panel.hbs`, width: 560, height: 640, resizable: true,
+        closeOnSubmit: false, classes: ["rotating-dungeon", "rd-settings"]});
     }
-    constructor(...args) { super(...args); this.sceneId = canvas.scene?.id; }
+    constructor(...args) {
+      super(...args); this.sceneId = canvas.scene?.id; this.targetSession = null; this.lookup = {};
+    }
     get scene() { return game.scenes.get(this.sceneId); }
     getData() {
       const scene = this.scene;
       if (!scene) return {noScene: true};
       const state = controller.state(scene);
       return {sceneName: scene.name, enabled: controller.enabled(scene), hz: state.hz, smooth: state.smooth, failed: controller.failure,
-        lights: [...scene.lights].map(n => ({id: n.id, label: `${n.id} (${Math.round(n.x)}, ${Math.round(n.y)}) [${n.getFlag(ID, "attachment") || "auto"}]`})),
-        notes: [...scene.notes].map(n => ({id: n.id, label: `${n.text || n.entry?.name || "Journal pin"} — ${n.id} [${n.getFlag(ID, "attachment") || "auto"}]`})),
         authority: controller.authority(scene)?.name ?? "No GM viewing scene",
-        slots: state.slots.map(s => ({...s, label: s.id.toUpperCase(),
-          clockwise: s.direction === 1,
-          walls: scene.walls.filter(w => w.getFlag(ID, "wall")?.slotId === s.id).length,
-          tiles: [...scene.tiles].map(t => ({id: t.id, selected: t.id === s.tileId,
-            label: `${t.id} — ${(t.texture.src ?? "No image").split("/").pop()} (${t.width} × ${t.height}, ${t.rotation}°)`})),
-          radial: s.footprint === "radial",
-          resolutions: [64,128,256].map(n => ({n, selected: n === s.resolution}))
-        }))};
+        slots: state.slots.map(s => {
+          const footprint = !state.autoFloor && s.footprint === "rectangle" ? "artwork" : s.footprint;
+          const notes = scene.notes.filter(n => controller.assigned(scene, state, [n.x,n.y], n.flags[ID] ?? {}, "carryNotes")?.id === s.id).length;
+          const lights = scene.lights.filter(n => controller.assigned(scene, state, [n.x,n.y], n.flags[ID] ?? {}, "carryLights")?.id === s.id).length;
+          return {...s, label: s.id.toUpperCase(), notes, lights, clockwise: s.direction === 1,
+            walls: scene.walls.filter(w => w.getFlag(ID, "wall")?.slotId === s.id).length,
+            tiles: [...scene.tiles].map(t => { const name = (t.texture.src ?? "No image").split("/").pop(); return {id: t.id, selected: t.id === s.tileId,
+              label: `${t.id} — ${name.length > 48 ? name.slice(0,45)+"…" : name}`}; }),
+            footprints: [{value:"artwork",label:"Automatic — tile transparency"},{value:"rectangle",label:"Whole rectangle"},{value:"radial",label:"Radial bands (rings)"}].map(f=>({...f,selected:f.value===footprint})),
+            resolutions: [64,128,256].map(n => ({n, selected: n === s.resolution}))};
+        })};
+    }
+    async populateTile(html, slot, tile) {
+      const revision = this.lookup[slot] = (this.lookup[slot] ?? 0) + 1;
+      const tileField = html.find(`[name='${slot}.tileId']`), maskField = html.find(`[name='${slot}.maskPath']`);
+      const changed = this.selectedTiles?.[slot] !== tile?.id;
+      this.selectedTiles ??= {}; this.selectedTiles[slot] = tile?.id ?? "";
+      tileField.val(tile?.id ?? "");
+      html.find(`[data-tile-id='${slot}']`).text(tile?.id ?? "Not selected");
+      if (changed) maskField.val("");
+      if (!tile || maskField.val()) return;
+      html.find(`[data-mask-status='${slot}']`).text("Looking for a matching mask…");
+      const mask = await findMatchingMask(tile.texture.src);
+      if (this.lookup[slot] !== revision || !this.rendered || tileField.val() !== tile.id) return;
+      if (!maskField.val() && mask) maskField.val(mask);
+      html.find(`[data-mask-status='${slot}']`).text(mask ? "Matching mask found. Save to apply walls." : "No matching mask found. Browse / Upload a mask image, or leave empty for no walls.");
     }
     activateListeners(html) {
       super.activateListeners(html);
+      this.selectedTiles = Object.fromEntries(controller.state(this.scene).slots.map(s => [s.id, s.tileId]));
+      html.find("select[data-slot-select]").on("change", event => {
+        const slot = event.currentTarget.dataset.slotSelect;
+        this.populateTile(html, slot, this.scene.tiles.get(event.currentTarget.value)).catch(e => ui.notifications.error(e.message));
+      });
       html.find("[data-action]").on("click", async event => {
         event.preventDefault();
         const button = event.currentTarget, {action, slot} = button.dataset;
-        button.disabled = true;
         try {
           controller.assertGM(this.scene);
-          if (action === "selected") {
-            const tile = canvas.tiles.controlled[0]?.document;
-            if (!tile || canvas.tiles.controlled.length !== 1) throw Error("Select exactly one tile on the Tiles layer first.");
-            html.find(`[name='${slot}.tileId']`).val(tile.id);
-            return;
-          }
-          if (action === "noteAttach" || action === "lightAttach") {
-            const prefix = action === "lightAttach" ? "light" : "note";
-            const noteId = html.find(`[name='${prefix}Id']`).val();
-            const attachment = html.find(`[name='${prefix}Attachment']`).val();
-            const note = (prefix === "light" ? this.scene.lights : this.scene.notes).get(noteId);
-            if (!note) throw Error("Choose a scene pin or light first.");
-            await controller.serial(async () => {
-              controller.assertGM(this.scene);
-              await note.update({[`flags.${ID}.attachment`]: attachment === "auto" ? null : attachment,
-                [`flags.${ID}.ride`]: null, [`flags.${ID}.ack`]: note.getFlag(ID, "request")?.id ?? null}, {[ID]: true});
-            });
-          }
-          else if (action === "resume") { controller.failure = false; controller.last = 0; }
-          else if (action === "generate") {
-            const count = await controller.generate(this.scene, slot);
-            ui.notifications.info(`Generated ${count} native walls for slot ${slot.toUpperCase()}.`);
-          } else if (action === "remove") {
-            const yes = await Dialog.confirm({title: "Remove generated walls?", content: `<p>Remove only this slot's module-generated walls? Hand-drawn walls are preserved.</p>`});
-            if (yes) await controller.remove(this.scene, slot);
-          } else if (["auto", "none", "a", "b"].includes(action)) {
-            const tokens = canvas.tokens.controlled;
-            if (!tokens.length) throw Error("Select one or more tokens first.");
-            await controller.serial(async () => {
-              controller.assertGM(this.scene);
-              await this.scene.updateEmbeddedDocuments("Token", tokens.map(t => ({_id: t.id,
-                [`flags.${ID}.attachment`]: action === "auto" ? null : action,
-                [`flags.${ID}.ride`]: null, [`flags.${ID}.ack`]: t.document.getFlag(ID, "request")?.id ?? null})), {[ID]: true});
-            });
-          } else await controller.control(this.scene, slot, action);
-          this.render(false);
-        } catch (error) { ui.notifications.error(error.message); console.error(ID, error); }
-        finally { button.disabled = false; }
+          if (action === "browse") {
+            const field = html.find(`[name='${slot}.maskPath']`);
+            new FilePicker({type:"image", current:field.val(), callback:path => {
+              field.val(path); html.find(`[data-mask-status='${slot}']`).text("Save to turn this mask into walls.");
+            }}).render(true);
+          } else if (action === "target") {
+            await this.minimize();
+            this.targetSession = new TileTargetSession(this.sceneId, async tile => {
+              await this.maximize(); await this.populateTile(html, slot, tile);
+            }, () => { if (this.rendered) this.maximize(); }).start();
+          } else if (action === "resume") { controller.failure = false; controller.last = 0; this.render(false); }
+          else if (action === "help") controller.openHelp();
+        } catch (error) { ui.notifications.error(error.message); }
       });
     }
+    async close(options) { this.targetSession?.finish(); this.lookup = {}; return super.close(options); }
     async _updateObject(event, form) {
+      const button = this.element.find("button[type='submit']"); button.prop("disabled", true).text("Applying masks…");
       try {
         const state = controller.state(this.scene);
         state.hz = Number(form.hz); state.smooth = !!form.smooth;
@@ -81,9 +83,10 @@ export function createPanelClass(controller) {
           for (const field of ["speed", "direction", "resolution", "threshold"]) slot[field] = Number(form[`${slot.id}.${field}`]);
           for (const field of ["carry", "carryNotes", "carryLights", "vision", "collision"]) slot[field] = !!form[`${slot.id}.${field}`];
         }
-        await controller.configure(this.scene, state);
-        ui.notifications.info("Rotating Dungeon configuration saved."); this.render(false);
+        const count = await controller.configure(this.scene, state);
+        ui.notifications.info(`Saved. ${count} mask walls applied; journal pins and lights are detected automatically.`); this.render(false);
       } catch (error) { ui.notifications.error(error.message); }
+      finally { button.prop("disabled", false).text("Save & apply masks"); }
     }
   };
 }

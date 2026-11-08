@@ -1,11 +1,12 @@
 import {ID, defaultState, validateState, normalize, toLocal, toWorld, onFloor, solidAt, wallCoordinates, visualAngle} from "./core.js";
-import {readMask} from "./mask.js";
+import {readMask, readFloor} from "./mask.js";
 const clone = value => foundry.utils.deepClone(value);
 const point = a => ({x: a[0], y: a[1]});
 
 export class RotationController {
   constructor() {
     this.queue = Promise.resolve(); this.last = 0; this.owner = null; this.timer = null;
+    this.readMask = readMask; this.readFloor = readFloor;
     this.failure = false; this.stopped = true;
   }
   enabled(scene = canvas.scene) { return scene?.getFlag(ID, "enabled") === true; }
@@ -43,10 +44,11 @@ export class RotationController {
     // B wins an initial overlap; an existing rider keeps its slot until it exits.
     return this.slots(scene, state).reverse().find(s => {
       const tile = scene.tiles.get(s.tileId), local = toLocal(center, tile, angles.get(s.id) ?? tile.rotation);
-      return s[carryKey] && onFloor(local, tile, s) && !(s.mask && solidAt(s.mask, local, tile));
+      return s[carryKey] && onFloor(local, tile, s) && !(carryKey === "carry" && s.mask && solidAt(s.mask, local, tile));
     });
   }
   assigned(scene, state, center, flags, carryKey = "carry") {
+    if (carryKey !== "carry") flags = {ride: flags.ride}; // Pins/lights are detected from the scene, never manually selected.
     if (flags.attachment === "none") return undefined;
     const desired = flags.attachment || flags.ride?.slotId;
     const slot = this.slots(scene, state).find(s => s[carryKey] && s.id === desired);
@@ -205,7 +207,7 @@ export class RotationController {
         }
       }
       const destination = toWorld(local, tile, angle), worldRotation = normalize(localRotation + angle);
-      if (!f.attachment && !onFloor(local, tile, slot)) {
+      if (!onFloor(local, tile, slot)) {
         slot = this.pick(scene, state, destination, angles, carryKey);
         local = slot ? toLocal(destination, scene.tiles.get(slot.tileId), angles.get(slot.id)) : null;
         if (slot && isLight) localRotation = normalize(worldRotation - angles.get(slot.id));
@@ -231,27 +233,60 @@ export class RotationController {
       mesh.rotation = (angle ?? tile.rotation) * Math.PI / 180;
     }
   }
+  wallData(slot, tile, segments) {
+    return segments.map(segment => ({c: wallCoordinates(segment, tile, tile.rotation),
+      move: slot.collision ? CONST.WALL_MOVEMENT_TYPES.NORMAL : CONST.WALL_MOVEMENT_TYPES.NONE,
+      sight: slot.vision ? CONST.WALL_SENSE_TYPES.NORMAL : CONST.WALL_SENSE_TYPES.NONE,
+      light: slot.vision ? CONST.WALL_SENSE_TYPES.NORMAL : CONST.WALL_SENSE_TYPES.NONE,
+      sound: CONST.WALL_SENSE_TYPES.NONE, door: CONST.WALL_DOOR_TYPES.NONE,
+      flags: {[ID]: {wall: {slotId: slot.id, tileId: tile.id, segment}}}}));
+  }
   async configure(scene, next) {
     return this.serial(async () => {
       this.assertGM(scene); validateState(next, scene.tiles);
-      const previous = this.state(scene);
-      if (previous.slots.some(s => s.running)) throw Error("Pause both slots before saving configuration or replacing masks.");
-      for (const s of next.slots) {
-        const old = previous.slots.find(o => o.id === s.id);
-        const walls = scene.walls.filter(w => w.getFlag(ID, "wall")?.slotId === s.id);
-        if (walls.length && ["tileId", "maskPath", "resolution", "threshold"].some(k => s[k] !== old[k]))
-          throw Error(`Remove slot ${s.id.toUpperCase()}'s generated walls before changing its tile or mask settings.`);
-        s.mask = old.mask; s.running = false;
+      const previous = this.state(scene), prepared = clone(next), data = [];
+      // Validate every image before changing any scene documents. Saving also refreshes a mask edited in place.
+      for (const slot of prepared.slots) {
+        const old = previous.slots.find(s => s.id === slot.id), tile = scene.tiles.get(slot.tileId);
+        slot.running = !!tile && old.tileId === slot.tileId && old.running;
+        slot.mask = null; slot.floor = null;
+        if (!tile) continue;
+        if (slot.footprint === "artwork") slot.floor = await this.readFloor(tile.texture?.src);
+        if (!slot.maskPath) continue;
+        let result;
+        try { result = await this.readMask(slot.maskPath, slot.resolution, slot.threshold); }
+        catch (error) {
+          const filename = slot.maskPath.split("/").pop().split(/[?#]/)[0];
+          throw Error(`Slot ${slot.id.toUpperCase()} — ${filename}: ${error.message}`);
+        }
+        slot.mask = result.mask; data.push(...this.wallData(slot, tile, result.segments));
       }
-      await scene.setFlag(ID, "state", next);
-      const updates = scene.walls.filter(w => w.getFlag(ID, "wall")).map(w => {
-        const s = next.slots.find(s => s.id === w.getFlag(ID, "wall").slotId);
-        return {_id: w.id, move: s.collision ? CONST.WALL_MOVEMENT_TYPES.NORMAL : CONST.WALL_MOVEMENT_TYPES.NONE,
-          sight: s.vision ? CONST.WALL_SENSE_TYPES.NORMAL : CONST.WALL_SENSE_TYPES.NONE,
-          light: s.vision ? CONST.WALL_SENSE_TYPES.NORMAL : CONST.WALL_SENSE_TYPES.NONE};
-      });
-      if (updates.length) await scene.updateEmbeddedDocuments("Wall", updates, {[ID]: true});
-      await this.clearRiders(scene);
+      this.assertGM(scene);
+      prepared.autoFloor = true;
+      const oldWalls = scene.walls.filter(w => w.getFlag(ID, "wall"));
+      const snapshots = oldWalls.map(w => w.toObject());
+      let created = [];
+      try {
+        if (data.length) created = await scene.createEmbeddedDocuments("Wall", data, {[ID]: true});
+        await scene.setFlag(ID, "state", prepared);
+        if (oldWalls.length) await scene.deleteEmbeddedDocuments("Wall", oldWalls.map(w => w.id), {[ID]: true});
+        await this.clearRiders(scene);
+        this.last = game.time.serverTime;
+      } catch (error) {
+        try {
+          const missing = snapshots.filter(w => !scene.walls.has(w._id));
+          if (missing.length) await scene.createEmbeddedDocuments("Wall", missing, {[ID]: true, keepId: true});
+          await scene.setFlag(ID, "state", previous);
+          const ids = created.filter(w => scene.walls.has(w.id)).map(w => w.id);
+          if (ids.length) await scene.deleteEmbeddedDocuments("Wall", ids, {[ID]: true});
+        } catch (rollbackError) {
+          this.failure = true;
+          console.error(ID, "Could not restore previous wall configuration", rollbackError);
+          throw Error(`${error.message} Automatic restoration failed; engine stopped. Restore the scene backup before resuming.`);
+        }
+        throw error;
+      }
+      return data.length;
     });
   }
   async clearRiders(scene, slotId = null) {
@@ -273,7 +308,7 @@ export class RotationController {
       if (action === "start") {
         if (!this.enabled(scene)) throw Error('Enable "This scene has Rotating Elements" in Scene Configuration first.');
         validateState(state, scene.tiles);
-        if ((s.vision || s.collision) && (!s.mask || !scene.walls.some(w => w.getFlag(ID, "wall")?.slotId === slotId))) throw Error("Generate mask walls before starting, or disable vision and collision.");
+        if (s.maskPath && (s.vision || s.collision) && (!s.mask || !scene.walls.some(w => w.getFlag(ID, "wall")?.slotId === slotId))) throw Error("Choose a wall mask and save settings first, or disable vision and collision in Advanced settings.");
         s.running = true;
       } else if (action === "pause") s.running = false;
       else if (action === "reverse") s.direction *= -1;

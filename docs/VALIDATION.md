@@ -2,11 +2,17 @@
 
 ## Completed locally
 
-- 48 automated Node tests: geometry transforms, opposite rotations, normalized boundaries, conservative mask reduction, holes/islands, alpha handling, radial bands, configuration validation, drift-free local anchors, ownership checks, stale requests, serialization, queued-movement races, native-collision delegation, global/slot pause, journal-pin movement/link retention, opt-outs, overlap precedence, owned-wall cleanup, scene opt-in and disabled movement, floating-panel data, light positioning/cone rotation, manual light changes, and preservation of illumination settings.
-- JavaScript syntax checks for all six module source files.
+- 63 automated Node tests: geometry transforms, opposite rotations, normalized boundaries, conservative mask reduction, holes/islands, alpha handling, radial bands, configuration validation, drift-free local anchors, ownership checks, stale requests, serialization, queued-movement races, native-collision delegation, global/slot pause, journal-pin movement/link retention, opt-outs, overlap precedence, owned-wall cleanup, scene opt-in and disabled movement, floating-panel data, light positioning/cone rotation, manual light changes, and preservation of illumination settings.
+- JavaScript syntax checks for all seven module source files.
 - Release packaging and archive integrity checks.
 
 The controller tests use a purpose-built mock of Foundry document collections and update transport. Native collision itself is mocked, not proven by those tests. No live Foundry session or actual source masks were available in the development workspace. Runtime v11 build 315 / D&D5e 2.4.1 validation is pending. The manifest intentionally does not claim a verified version.
+
+## rc.2 additional local verification
+
+- Actual Handlebars settings template rendered with a long-filename fixture in a browser harness. At 560 px and 380 px panel widths, content scrollWidth equals clientWidth and Browse / Upload remains within the panel, including expanded advanced settings. This harness approximates Foundry styling; it is not live Foundry validation.
+- Automatic mask replacement, missing/invalid mask preservation, failed-state-save rollback, tile-switch pause, transparent floor coverage, wall-mounted pin/light discovery, target selection and cancellation, matching filenames, WebP and extensionless image decoding.
+- In-app Help and updated user guide included.
 
 ## Required live checks before calling this stable
 
@@ -21,7 +27,7 @@ Record result, Foundry/system versions, browser, relevant modules, wall count, u
 | Start at existing 270° rotation | No snap or doubled rotation; mask aligns | Pending |
 | Different speeds and opposing directions | Independent rotation; correct centers | Pending |
 | Start/pause/reverse/global pause | No discontinuity beyond bounded artwork extrapolation | Pending |
-| PNG mask fixture, then actual masks | Native walls match; holes retained; cap enforced | Pending |
+| Image mask fixture, then actual masks | Native walls match; holes retained; cap enforced | Pending |
 | Player vision + token light + ambient light | Walls occlude correctly at each sampled angle | Pending |
 | Player drag and keyboard movement | Intent commits without being overwritten; walls block | Pending |
 | Two players moving simultaneously | No cross-token interference or stale teleports | Pending |
@@ -36,7 +42,7 @@ Record result, Foundry/system versions, browser, relevant modules, wall count, u
 | 5 Hz with representative token/pin/wall counts | Acceptable FPS, network load, and vision cadence | Pending |
 | 1 Hz and 10 Hz; speed range | Clear tradeoffs; no overlapping local write batches | Pending |
 | Other movement/lighting/tile modules enabled | No incompatible interceptors or competing animation | Pending |
-| Remove generated walls | Hand-drawn/static walls and journal links untouched | Pending |
+| Clear mask and save | Hand-drawn/static walls and journal links untouched | Pending |
 | Reload after pause; disable/re-enable | Persisted positions retained; resume has no jump | Pending |
 
 ## Minimal test scene

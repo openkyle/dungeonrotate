@@ -6,6 +6,8 @@
 
 `Scene.flags.rotating-dungeon.state` contains schema version 1, update frequency, smoothing setting, and exactly two slot configurations. Each slot stores a selected tile ID, mask path, compressed raster runs, rotation settings, carry flags, and floor-region settings. Existing tile positions/rotations remain authoritative; the scene clock is not advanced while offline.
 
+Slot `floor` data stores alpha coverage from tile artwork for automatic floor detection. `autoFloor` marks the updated setup flow; existing rc.1 users initialize it by saving settings. Pins/lights ignore old per-object attachment choices and use scene position and coverage.
+
 Generated Wall documents carry `flags.rotating-dungeon.wall` with slot ID, tile ID, and normalized boundary segment. Coordinates are regenerated from the immutable normalized segment and current tile dimensions/angle; rotations never accumulate rounding drift. Only these walls are removed by slot cleanup.
 
 Token, Note, and AmbientLight documents carry `ride` (slot ID and exact local anchor), `attachment` (null/auto, a, b, or none), `request` (movement intent), and `ack`. Light rides also store a local angular offset; their top-level `rotation` follows the floor while `config` remains untouched. Tokens additionally store a `rejected` request ID for owner feedback. Integer world coordinates are derived from exact local anchors; pin journal/page IDs are untouched.
@@ -44,3 +46,9 @@ Implementation targets Foundry's published v11 interfaces:
 - [Settings menus](https://foundryvtt.com/api/v11/classes/client.ClientSettings.html)
 
 - [AmbientLight schema and rotation field](https://foundryvtt.com/api/v11/classes/foundry.documents.BaseAmbientLight.html)
+
+## Setup and targeting in rc.2
+
+A single TileTargetSession registers a one-shot controlTile hook after activating/releasing the Tiles layer. It filters by scene, cleans up listeners on pick/cancel, and cancels on Escape, canvas teardown, replacement by another session, or a one-minute timeout. Settings targeting fills the current form; floating targeting applies the selection immediately. Matching-mask lookup probes only conventional names in the chosen image directory. Asynchronous settings lookups use a revision counter so an older result cannot overwrite a newer selection.
+
+Configure stages every image before writing documents, creates replacement walls, persists state, deletes only prior managed walls, and resets rider anchors. Failures restore prior state and missing old walls, then delete staged replacements. A rollback failure stops the engine. Native cross-document atomicity is still unavailable. Image pixels are browser-decoded; masks need not have a PNG extension. Native FilePicker is opened explicitly from the visible Browse / Upload button.

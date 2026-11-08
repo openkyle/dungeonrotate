@@ -4,10 +4,11 @@
   {{#if failed}}<p class="error">Engine stopped after an error.</p><button type="button" data-action="resume">Resume engine</button>{{/if}}
   {{#each slots}}
   <div class="rotation-slot">
-    <div class="slot-heading"><strong>{{label}}</strong><span class="image-name" title="{{imageName}}">{{imageName}}</span><span>{{#if running}}Running{{else}}Paused{{/if}}</span></div>
+    <div class="slot-heading"><strong>{{label}}</strong><span class="image-name" title="{{imageName}}">{{#if tileId}}{{tileId}}{{else}}No tile selected{{/if}}</span><span>{{#if running}}Running{{else}}Paused{{/if}}</span></div>
+    <button type="button" data-action="target" data-slot="{{id}}" {{#unless ../isController}}disabled{{/unless}}><i class="fas fa-crosshairs"></i> Target tile</button>
     <div class="slot-speed">{{speed}}°/s · {{directionText}}</div>
     <div class="actions"><button type="button" data-action="{{toggle}}" data-slot="{{id}}" {{#unless assigned}}disabled{{/unless}} {{#unless ../isController}}disabled{{/unless}}>{{toggleText}}</button><button type="button" data-action="reverse" data-slot="{{id}}" {{#unless assigned}}disabled{{/unless}} {{#unless ../isController}}disabled{{/unless}}>Reverse</button></div>
   </div>
   {{/each}}
-  <div class="actions"><button type="button" data-action="pauseAll" {{#unless isController}}disabled{{/unless}}>Pause all</button><button type="button" data-action="settings"><i class="fas fa-cog"></i> Settings</button></div>
+  <div class="actions"><button type="button" data-action="pauseAll" {{#unless isController}}disabled{{/unless}}>Pause all</button><button type="button" data-action="settings"><i class="fas fa-cog"></i> Settings</button><button type="button" data-action="help">Help</button></div>
 </section>

@@ -21,7 +21,7 @@ if args.repository:
         parser.error('Repository must be owner/repository')
     repo = 'https://github.com/' + args.repository
     manifest.update(url=repo, bugs=repo + '/issues',
-                    manifest=repo + (f'/releases/download/{tag}/module.json' if '-' in manifest['version'] else '/releases/latest/download/module.json'),
+                    manifest=f'https://raw.githubusercontent.com/{args.repository}/main/module.json',
                     download=f'{repo}/releases/download/{tag}/rotating-dungeon.zip')
 for key in ['esmodules', 'styles']:
     for path in manifest[key]:

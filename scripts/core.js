@@ -18,9 +18,9 @@ export function contains(local, tile) {
 }
 export function slotDefaults(id) {
   return {id, tileId: "", maskPath: "", speed: 0.5, direction: 1, carry: true, carryNotes: true, carryLights: true,
-    vision: true, collision: true, running: false, footprint: "rectangle", bands: "0-1", resolution: 128, threshold: 128, mask: null};
+    vision: true, collision: true, running: false, footprint: "artwork", bands: "0-1", resolution: 128, threshold: 128, mask: null, floor: null};
 }
-export function defaultState() { return {schema: SCHEMA, hz: 5, smooth: true, slots: [slotDefaults("a"), slotDefaults("b")]}; }
+export function defaultState() { return {schema: SCHEMA, autoFloor: true, hz: 5, smooth: true, slots: [slotDefaults("a"), slotDefaults("b")]}; }
 export function validateState(state, tiles) {
   if (state.schema !== SCHEMA) throw Error("Unsupported saved configuration version.");
   if (!Number.isInteger(state.hz) || state.hz < 1 || state.hz > 10) throw Error("Geometry update rate must be 1–10 Hz.");
@@ -31,7 +31,7 @@ export function validateState(state, tiles) {
     if (![1, -1].includes(s.direction)) throw Error("Invalid rotation direction.");
     if (![64, 128, 256].includes(s.resolution)) throw Error("Invalid mask resolution.");
     if (!Number.isInteger(s.threshold) || s.threshold < 1 || s.threshold > 254) throw Error("Mask threshold must be 1–254.");
-    if (!["rectangle", "radial"].includes(s.footprint)) throw Error("Invalid floor footprint.");
+    if (!["artwork", "rectangle", "radial"].includes(s.footprint)) throw Error("Invalid floor footprint.");
     parseBands(s.bands);
     if (!s.tileId) continue;
     if (used.has(s.tileId)) throw Error("Select a different tile for each slot.");
@@ -115,6 +115,7 @@ export function parseBands(text) {
   return bands;
 }
 export function onFloor(local, tile, slot) {
+  if (slot.footprint === "artwork" && slot.floor) return solidAt(slot.floor, local, tile);
   if (slot.footprint !== "radial") return contains(local, tile);
   const r = Math.hypot(local[0] / (tile.width / 2), local[1] / (tile.height / 2));
   return parseBands(slot.bands).some(([a, b]) => r >= a && r < b);

@@ -17,7 +17,7 @@ function apply(doc, change) {
     obj[parts.at(-1)]=structuredClone(value);
   }
 }
-function document(data) { return {...data, flags:data.flags??{}, getFlag(ns,k){return this.flags[ns]?.[k];}, async update(change){apply(this,change);return this;}, testUserPermission:u=>u?.isGM||u?.id==="p",canUserModify:u=>u?.isGM}; }
+function document(data) { return {...data, toObject(){const {parent,object,...rest}=this;return JSON.parse(JSON.stringify(rest));}, flags:data.flags??{}, getFlag(ns,k){return this.flags[ns]?.[k];}, async update(change){apply(this,change);return this;}, testUserPermission:u=>u?.isGM||u?.id==="p",canUserModify:u=>u?.isGM}; }
 function setup() {
   const state=defaultState();state.slots[0].tileId="t1";state.slots[0].running=true;state.slots[0].speed=10;
   state.slots[1].tileId="t2";state.slots[1].running=true;state.slots[1].direction=-1;state.slots[1].speed=5;
@@ -31,6 +31,9 @@ function setup() {
     for(const u of updates) apply(docs.get(u._id),u);
     return updates.map(u=>docs.get(u._id));
   };
+  let counter=0;
+  scene.createEmbeddedDocuments=async(type,rows,options)=>rows.map(row=>{const id=row._id??`new-${++counter}`;const doc=document({...structuredClone(row),id,_id:id});scene.walls.set(id,doc);return doc;});
+  globalThis.CONST={WALL_MOVEMENT_TYPES:{NORMAL:20,NONE:0},WALL_SENSE_TYPES:{NORMAL:20,NONE:0},WALL_DOOR_TYPES:{NONE:0}};
   scene.deleteEmbeddedDocuments=async(type,ids)=>{for(const id of ids) scene.walls.delete(id);};
   const gm={id:"gm",isGM:true,active:true,viewedScene:"scene"},player={id:"p",isGM:false,active:true,viewedScene:"scene"};
   globalThis.game={user:gm,users:new Collection([[gm.id,gm],[player.id,player]]),paused:false,time:{serverTime:1000}};
@@ -89,8 +92,8 @@ test("journal pins ride while preserving journal and page references",async()=>{
 test("manual journal pin move changes floor-relative anchor",async()=>{
   const {c,scene}=setup(),n=note(scene),change={x:750,y:500};c.interceptNote(n,change,{});assert.equal(change.x,undefined);apply(n,change);await c.tick();assert.deepEqual(n.getFlag(ID,"ride").local,[250,0]);
 });
-test("opted-out tokens and notes remain stationary",async()=>{
-  const {c,scene}=setup(),t=token(scene),n=note(scene);t.flags[ID]={attachment:"none"};n.flags[ID]={attachment:"none"};await c.tick();assert.equal(t.x,650);assert.equal(n.x,700);assert.equal(n.y,500);
+test("token opt-out remains supported while old note flags do not suppress automatic discovery",async()=>{
+  const {c,scene}=setup(),t=token(scene),n=note(scene);t.flags[ID]={attachment:"none"};n.flags[ID]={attachment:"none"};await c.tick();assert.equal(t.x,650);assert.equal(n.x,700);assert.ok(n.y>500);
 });
 test("journal pins carry independently of carry-tokens option",async()=>{
   const {c,scene,state}=setup(),t=token(scene),n=note(scene);state.slots[0].carry=false;await c.tick();assert.equal(t.x,650);assert.ok(n.y>500);
@@ -120,10 +123,10 @@ test("requests arriving during a commit are not overwritten by an old acknowledg
   await c.tick();assert.equal(t.getFlag(ID,"request").id,"newer");assert.equal(t.getFlag(ID,"ack"),"request-1");
 });
 
-test("explicit attachment does not jump to another overlapping floor when carrying is disabled",async()=>{
+test("token attachment stays explicit while notes use automatic eligible floor detection",async()=>{
   const {c,scene,state}=setup(),t=token(scene),n=note(scene);
   scene.tiles.get("t2").x=0;state.slots[0].carry=false;state.slots[0].carryNotes=false;
-  t.flags[ID]={attachment:"a"};n.flags[ID]={attachment:"a"};await c.tick();assert.equal(t.x,650);assert.equal(n.y,500);
+  t.flags[ID]={attachment:"a"};n.flags[ID]={attachment:"a"};await c.tick();assert.equal(t.x,650);assert.equal(n.getFlag(ID,"ride").slotId,"b");
 });
 test("automatic overlap chooses B, explicit attachment chooses A",()=>{
   const {c,scene}=setup();scene.tiles.get("t2").x=0;
@@ -148,9 +151,9 @@ test("manual light position and rotation update their floor-relative anchors",as
   c.interceptLight(l,change,{});assert.equal(change.rotation,undefined);assert.equal(change.x,undefined);apply(l,change);await c.tick();
   assert.deepEqual(l.getFlag(ID,"ride").local,[250,0]);assert.equal(l.rotation,182);
 });
-test("light opt-out and slot carry-light toggle preserve stationary illumination",async()=>{
-  const {c,scene,state}=setup(),l=light(scene);l.flags[ID]={attachment:"none"};await c.tick();assert.equal(l.y,500);assert.equal(l.rotation,90);
-  l.flags[ID]={};state.slots[0].carryLights=false;game.time.serverTime+=200;await c.tick();assert.equal(l.y,500);
+test("legacy light opt-out is ignored; slot carry-light toggle stops carrying",async()=>{
+  const {c,scene,state}=setup(),l=light(scene);l.flags[ID]={attachment:"none"};await c.tick();assert.ok(l.y>500);assert.equal(l.rotation,92);
+  const y=l.y;state.slots[0].carryLights=false;game.time.serverTime+=200;await c.tick();assert.equal(l.y,y);
 });
 test("light attachment keeps its angular offset on a tile already rotated 270 degrees",async()=>{
   const {c,scene}=setup(),l=light(scene);l.x=2200;l.y=500;l.rotation=30;l.flags[ID]={attachment:"b"};await c.tick();assert.equal(l.rotation,29);
@@ -168,4 +171,42 @@ test("manual moves while disabled discard old anchors so re-enabling does not sn
 });
 test("clear-riders handles lights without altering their configuration",async()=>{
   const {c,scene}=setup(),l=light(scene);await c.tick();await c.clearRiders(scene,"a");assert.equal(l.getFlag(ID,"ride"),null);assert.equal(l.config.color,"#ff8800");
+});
+
+function maskStub(c) {
+ c.readFloor=async()=>null;
+ c.readMask=async()=>({mask:{w:1,h:1,runs:[[0,1]]},segments:[[-.5,-.5,.5,-.5]]});
+}
+test("save automatically creates and replaces only managed walls while retaining running state",async()=>{
+ const {c,scene}=setup();maskStub(c);scene.walls.set("hand",document({id:"hand",_id:"hand"}));
+ let state=c.state();state.slots[0].maskPath="floor.png";await c.configure(scene,state);
+ assert.equal(scene.walls.size,2);assert.equal(c.state().slots[0].running,true);
+ await c.configure(scene,c.state());assert.equal(scene.walls.size,2);assert.ok(scene.walls.has("hand"));
+ state=c.state();state.slots[0].maskPath="";await c.configure(scene,state);assert.equal(scene.walls.size,1);assert.ok(scene.walls.has("hand"));
+});
+test("invalid second mask leaves both original configurations intact",async()=>{
+ const {c,scene}=setup();maskStub(c);let state=c.state();state.slots[0].maskPath="ok.png";await c.configure(scene,state);
+ const before=c.state(),ids=[...scene.walls.keys()];state=c.state();state.slots[1].maskPath="broken.png";
+ c.readMask=async path=>{if(path==="broken.png")throw Error("Unreadable mask");return {mask:{w:1,h:1,runs:[[0,1]]},segments:[[-.5,-.5,.5,-.5]]};};
+ await assert.rejects(()=>c.configure(scene,state),/Unreadable/);assert.deepEqual(c.state(),before);assert.deepEqual([...scene.walls.keys()],ids);
+});
+test("failed state save removes staged walls and preserves old ones",async()=>{
+ const {c,scene}=setup();maskStub(c);let state=c.state();state.slots[0].maskPath="ok.png";await c.configure(scene,state);
+ const before=c.state(),ids=[...scene.walls.keys()],original=scene.setFlag;let fail=true;
+ scene.setFlag=async(...args)=>{if(fail){fail=false;throw Error("Save failed");}return original(...args);};
+ await assert.rejects(()=>c.configure(scene,c.state()),/Save failed/);assert.deepEqual(c.state(),before);assert.deepEqual([...scene.walls.keys()],ids);
+});
+test("switching to a different tile pauses that slot and cleans up the prior mask",async()=>{
+ const {c,scene}=setup();maskStub(c);scene.tiles.set("third",document({id:"third",x:3000,y:0,width:500,height:500,rotation:0}));
+ const state=c.state();state.slots[0].tileId="third";await c.configure(scene,state);assert.equal(c.state().slots[0].running,false);assert.equal(c.state().slots[1].running,true);
+});
+test("pins and wall-mounted lights are discovered even on solid mask pixels",async()=>{
+ const {c,scene,state}=setup(),n=note(scene),l=light(scene);state.slots[0].mask={w:1,h:1,runs:[[0,1]]};await c.tick();
+ assert.ok(n.y>500);assert.ok(l.y>500);
+});
+test("transparent artwork gaps exclude pins and lights from the wrong overlapping ring",()=>{
+ const {c,scene,state}=setup();scene.tiles.get("t2").x=0;
+ scene.tiles.get("t2").rotation=0;state.slots[1].floor={w:2,h:1,runs:[[0,1]]};
+ assert.equal(c.pick(scene,state,[700,500],new Map(),"carryNotes").id,"a");
+ assert.equal(c.pick(scene,state,[200,500],new Map(),"carryLights").id,"b");
 });
