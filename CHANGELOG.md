@@ -1,3 +1,9 @@
+# 0.1.0-rc.11
+
+- Add a separate GM-only Custom Rotation Speeds settings menu for eight world-wide speed presets (0.01–10°/s).
+
+- Add per-slot minus/plus speed controls above Reverse and Reset rotation: eight levels from 0.1 to 0.8 degrees per second, with synchronized motion-clock updates.
+
 # 0.1.0-rc.10
 
 - GM-originated token moves bypass native wall collision and solid-mask destination checks on rotating floors, including while the game is paused. Player moves remain collision checked.

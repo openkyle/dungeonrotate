@@ -2,6 +2,7 @@ import {ID} from "./core.js";
 import {RotationController} from "./controller.js";
 import {createPanelClass} from "./panel.js";
 import {addSceneToggle, createFloatingClass} from "./floating.js";
+import {DEFAULT_SPEEDS, createSpeedMenuClass} from "./speeds.js";
 const controller = new RotationController();
 let Panel, Floating, floating, ticker;
 function syncFloating(force = false) {
@@ -19,6 +20,8 @@ function attachTicker() {
   ticker?.add(controller.draw, controller, -10);
 }
 Hooks.once("init", () => {
+  game.settings.register(ID,"rotationSpeeds",{scope:"world",config:false,type:Array,default:[...DEFAULT_SPEEDS],onChange:()=>syncFloating(false)});
+  game.settings.registerMenu(ID,"customSpeeds",{name:"Custom Rotation Speeds",label:"Configure speed levels",hint:"Set the eight speeds used by the floating minus and plus buttons.",icon:"fas fa-tachometer-alt",type:createSpeedMenuClass(),restricted:true});
   controller.openHelp = () => new Application({id:"rotating-dungeon-help",title:"Rotating Elements — Help",
     template:`modules/${ID}/templates/help.hbs`,width:540,height:580,resizable:true,classes:["rotating-dungeon"]}).render(true);
   Panel = createPanelClass(controller);

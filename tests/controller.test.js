@@ -294,3 +294,14 @@ test("player drags retain wall blocking when processed by GM",async()=>{
  const change={x:750};c.intercept(t,change,{});apply(t,change);c.observeTokenRequest(t,change,player.id);game.user=gm;
  await c.tick();assert.equal(t.getFlag(ID,"rejected"),"request-1");
 });
+
+test("speed controls step through eight levels, preserve running and direction, and update the shared clock",async()=>{
+ const {c,scene,state}=setup();state.slots[0].speed=.1;state.slots[0].direction=-1;
+ for(let level=2;level<=8;level++) {await c.control(scene,"a","speedUp");assert.equal(c.state().slots[0].speed,level/10);}
+ await c.control(scene,"a","speedUp");assert.equal(c.state().slots[0].speed,.8);
+ assert.equal(scene.tiles.get("t1").getFlag(ID,"motion").velocity,-.8);
+ assert.equal(c.state().slots[0].running,true);assert.equal(c.state().slots[1].speed,5);
+ for(let level=7;level>=1;level--) {await c.control(scene,"a","speedDown");assert.equal(c.state().slots[0].speed,level/10);}
+ await c.control(scene,"a","speedDown");assert.equal(c.state().slots[0].speed,.1);
+ game.paused=true;await c.control(scene,"a","speedUp");assert.equal(scene.tiles.get("t1").getFlag(ID,"motion").velocity,0);
+});

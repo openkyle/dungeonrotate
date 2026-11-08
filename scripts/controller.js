@@ -1,5 +1,6 @@
 import {ID, defaultState, validateState, normalize, toLocal, toWorld, onFloor, solidAt, wallCoordinates, visualAngle} from "./core.js";
 import {readMask, readFloor} from "./mask.js";
+import {stepSpeed} from "./speeds.js";
 const clone = value => foundry.utils.deepClone(value);
 const point = a => ({x: a[0], y: a[1]});
 
@@ -400,7 +401,9 @@ export class RotationController {
         return;
       }
       if (action === "reset") { await this.resetSlot(scene, state, s, tile); return; }
-      if (action === "start") {
+      if (action === "speedDown" || action === "speedUp") {
+        s.speed = stepSpeed(s.speed, action === "speedUp" ? 1 : -1);
+      } else if (action === "start") {
         if (this.failure) throw Error(`Engine stopped: ${this.lastError || "previous update failed"}. Use Resume engine first.`);
         if (!this.enabled(scene)) throw Error('Enable "This scene has Rotating Elements" in Scene Configuration first.');
         validateState(state, scene.tiles);

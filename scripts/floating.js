@@ -1,5 +1,6 @@
 import {TileTargetSession} from "./target.js";
 import {findMatchingMask} from "./mask.js";
+import {rotationSpeeds} from "./speeds.js";
 import {ID} from "./core.js";
 
 export function addSceneToggle(app, html) {
@@ -22,11 +23,13 @@ export function createFloatingClass(controller, openSettings) {
         resizable: false, minimizable: true, classes: ["rotating-dungeon", "rotating-elements-floating"]});
     }
     getData() {
-      const scene = canvas.scene;
+      const scene = canvas.scene, speeds = rotationSpeeds();
       return {sceneName: scene?.name, enabled: controller.enabled(scene), failed: controller.failure, lastError: controller.lastError, gamePaused: !!game.paused,
         isController: controller.authority(scene)?.id === game.user.id,
         slots: controller.state(scene).slots.map(s => ({...s, label: s.id.toUpperCase(),
           assigned: !!scene?.tiles.get(s.tileId),
+          speedLevel: speeds.findIndex(v=>Math.abs(v-s.speed)<1e-9)+1 || null,
+          canSlow: s.speed > speeds[0], canSpeed: s.speed < speeds.at(-1),
           status: controller.failure ? "Engine stopped" : !s.running ? "Paused" : game.paused ? "Waiting for unpause" : "Running",
           imageName: (scene?.tiles.get(s.tileId)?.texture.src ?? "Choose a tile in settings").split("/").pop(),
           directionText: s.direction === 1 ? "Clockwise" : "Counterclockwise",

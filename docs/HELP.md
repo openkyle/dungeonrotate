@@ -88,3 +88,9 @@ Inner and Outer target one pixel of the processing grid (not an original image p
 ## GM movement through walls
 
 GM token drags on rotating floors can pass through walls and enter masked areas. Players remain blocked by walls and masks. No modifier key is needed. GM moves also work while the game is paused; normal scene boundaries still apply.
+
+### Quick speed controls
+Use − and + beside Speed in each floating slot to select levels 1–8 (0.1–0.8 degrees per second). Changes apply while running and preserve direction and paused state. Each slot has its own speed.
+
+### Custom rotation speeds
+Open Configure Settings → Module Settings → Rotating Dungeon → Custom Rotation Speeds. Set eight strictly increasing levels between 0.01 and 10 degrees per second. These world-wide presets replace the default 0.1–0.8 levels for both slots on every scene. Saving leaves current slot speeds unchanged; use − / + to apply a preset. Restore defaults fills the original values; Save speeds commits them.

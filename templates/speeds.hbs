@@ -1,0 +1,6 @@
+<form autocomplete="off">
+  <p>Choose the eight levels used by the floating − / + buttons for all scenes in this world. Speeds are degrees per second, from slowest to fastest (0.01–10).</p>
+  {{#each levels}}<div class="form-group"><label for="rotation-speed-{{level}}">Level {{level}}</label><input id="rotation-speed-{{level}}" name="level{{level}}" type="number" min="0.01" max="10" step="0.01" value="{{speed}}" required></div>{{/each}}
+  <p class="notes">Saving does not change currently rotating slots. Use their − / + buttons to select a new speed.</p>
+  <div class="actions"><button type="button" data-action="defaults">Restore defaults</button><button type="submit"><i class="fas fa-save"></i> Save speeds</button></div>
+</form>

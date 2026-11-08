@@ -43,3 +43,8 @@
 #rotating-dungeon-help {max-width:calc(100vw - 24px);max-height:calc(100vh - 32px);}
 #rotating-dungeon-help .rd-help {overflow-wrap:anywhere;line-height:1.5;}
 .rotating-elements-floating .rotation-slot > button {width:100%;margin-top:6px;}
+
+.rotating-elements-floating .slot-speed {display:flex; align-items:center; gap:6px;}
+.rotating-elements-floating .slot-speed span {flex:1; min-width:0;}
+.rotating-elements-floating .slot-speed button {flex:0 0 30px; width:30px; margin:0; font-size:18px;}
+.rotating-elements-floating .slot-direction {margin-bottom:4px;}
