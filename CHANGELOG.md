@@ -1,3 +1,8 @@
+# 0.1.0-rc.9
+
+- Simplified Wall placement to three choices: Inner (slightly less visible floor), Matched (mask outline), and Outer (slightly more visible floor). Save & apply masks rebuilds walls with the chosen placement.
+- Previous medium offsets remain active until saved; saving maps them to the corresponding Inner/Outer setting.
+
 # 0.1.0-rc.8
 
 - Added per-slot Wall margin: Original outline, Widen rooms (small/medium), and Thicken walls (small/medium). Widen rooms reveals more floor by moving the boundary into the solid mask.

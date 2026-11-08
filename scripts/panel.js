@@ -32,7 +32,7 @@ export function createPanelClass(controller) {
             tiles: [...scene.tiles].map(t => { const name = (t.texture.src ?? "No image").split("/").pop(); return {id: t.id, selected: t.id === s.tileId,
               label: `${t.id} — ${name.length > 48 ? name.slice(0,45)+"…" : name}`}; }),
             footprints: [{value:"artwork",label:"Automatic — tile transparency"},{value:"rectangle",label:"Whole rectangle"},{value:"radial",label:"Radial bands (rings)"}].map(f=>({...f,selected:f.value===footprint})),
-            marginOptions: [{value:0,label:"Original outline"},{value:1,label:"Widen rooms — small"},{value:2,label:"Widen rooms — medium"},{value:-1,label:"Thicken walls — small"},{value:-2,label:"Thicken walls — medium"}].map(o=>({...o,selected:o.value===(s.wallMargin??0)})),
+            marginOptions: [{value:-1,label:"Inner"},{value:0,label:"Matched"},{value:1,label:"Outer"}].map(o=>({...o,selected:o.value===Math.sign(s.wallMargin??0)})),
             smoothingOptions: [{value:0,label:"Off — exact pixels"},{value:.5,label:"Light"},{value:1,label:"Balanced (recommended)"},{value:2,label:"Strong"}].map(o=>({...o,selected:o.value===(s.wallSmoothing??1)})),
             resolutions: [64,128,256].map(n => ({n, selected: n === s.resolution}))};
         })};

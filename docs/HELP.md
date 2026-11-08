@@ -81,6 +81,6 @@ New walls automatically attach when an endpoint is within 15% of a grid square o
 
 ## Reveal more floor around room edges
 
-Choose **Wall margin → Widen rooms — small**, then **Save & apply masks** for each affected slot. This moves the wall boundary into the solid mask, revealing more of the room. Medium widens farther. Original outline restores zero margin. Thicken walls does the opposite.
+Choose **Wall placement → Outer**, then **Save & apply masks** for each affected slot. This moves the wall boundary into the solid mask, revealing more of the room. Matched restores zero margin. Inner does the opposite, cropping slightly into the room.
 
-Small/medium target one/two pixels of the processing grid (not original image pixels). With a 4,620-pixel tile and resolution 256, Small is approximately 18 scene pixels. Higher resolution gives a finer margin. Thin barriers and narrow openings keep a reduced margin locally to protect their shape. Mask-generated walls and destination collision occupancy use the adjusted mask. Existing hand-drawn walls stay where you placed them. Inspect room edges and door connections after saving.
+Inner and Outer target one pixel of the processing grid (not an original image pixel). With a 4,620-pixel tile and resolution 256, Outer is approximately 18 scene pixels. Higher resolution gives a finer margin. Thin barriers and narrow openings keep a reduced margin locally to protect their shape. Mask-generated walls and destination collision occupancy use the adjusted mask. Existing hand-drawn walls stay where you placed them. Inspect room edges and door connections after saving.
