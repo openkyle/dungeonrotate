@@ -1,3 +1,11 @@
+# 0.1.0-rc.4
+
+- Replaced guessed mask-image downloads with one storage-provider folder listing. Auto-discovery no longer issues GET requests for nonexistent `_mask` variants. If a folder cannot be listed, select the mask with Browse / Upload.
+- Floating controls now show “Waiting for unpause” when Foundry is paused. Start explains that Space resumes the game; the panel refreshes when global pause changes.
+- Engine failures refresh the panel with the actual error. Start refuses to silently arm a failed engine and points to Resume engine.
+- Added a compact read-only `game.modules.get("rotating-dungeon").api.diagnostics()` report for troubleshooting non-moving tiles.
+- 70 automated tests pass, including slow-speed Start/pause/unpause and folder discovery without image probes. The reported live Start failure is not yet reproduced; multiplayer and Forge integration validation remain pending.
+
 # 0.1.0-rc.3
 
 - Removed the 16-megapixel mask rejection. Large images are processed automatically in bounded 1024 × 256 pixel scratch chunks, without allocating a full-size RGBA canvas buffer.

@@ -21,4 +21,5 @@ test("floating view derives two independent controls from current scene settings
   const state=defaultState();state.slots[0].tileId="custom";state.slots[0].running=true;state.slots[1].direction=-1;
   const C=createFloatingClass({enabled:()=>true,authority:()=>({id:"gm"}),state:()=>state},()=>{});
   const data=new C().getData();assert.equal(data.slots[0].toggle,"pause");assert.equal(data.slots[1].toggle,"start");assert.equal(data.slots[0].imageName,"user-image.webp");assert.equal(data.slots[1].directionText,"Counterclockwise");assert.equal(C.defaultOptions.width,350);
+  game.paused=true;assert.equal(new C().getData().slots[0].status,"Waiting for unpause");assert.equal(new C().getData().gamePaused,true);
 });

@@ -50,3 +50,11 @@ Settings contains setup only. **Start/Pause/Reverse** controls live in the float
 To change a tile's artwork or placement, pause it, set its slot to None and save, edit it normally in Foundry, then target it again. This prevents the mask walls from drifting away from the image.
 
 A GM must keep this scene open for synchronized rotation. Use one browser session per GM account. Disable Fog Exploration for rotating encounters: explored fog does not rotate. Vision and geometry update in discrete samples; this release candidate still needs testing in your live Foundry setup.
+
+## Start appears to do nothing
+
+Foundry's global game pause freezes the rotating floors too. The floating panel displays **Waiting for unpause**; press Space to resume the game. Start arms the selected slot while paused. At the default 0.5°/second, the tile turns only 5° in ten seconds.
+
+If the panel shows **Engine stopped**, read the displayed error, resolve the cause, and use **Resume engine**. The controlling GM must remain on this scene. If the game is unpaused but motion still fails, run `game.modules.get("rotating-dungeon").api.diagnostics()` in the browser console and share the result. Run it again after ten seconds to compare the rotation and last-update clock.
+
+Automatic mask discovery lists the tile's storage folder through Foundry's file picker, including its configured hosting provider. It selects only a matching file in that folder. Hosts without folder-listing access require **Browse / Upload**; the module does not download guessed missing filenames.

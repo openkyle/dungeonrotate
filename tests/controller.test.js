@@ -210,3 +210,17 @@ test("transparent artwork gaps exclude pins and lights from the wrong overlappin
  assert.equal(c.pick(scene,state,[700,500],new Map(),"carryNotes").id,"a");
  assert.equal(c.pick(scene,state,[200,500],new Map(),"carryLights").id,"b");
 });
+
+test("Start while globally paused warns and rotation begins after unpause at default slow speed",async()=>{
+ const {c,scene,state}=setup();state.slots[0].running=false;state.slots[0].speed=.5;
+ let warning="";ui.notifications.warn=message=>warning=message;game.paused=true;
+ await c.control(scene,"a","start");assert.match(warning,/Foundry is paused/);
+ game.time.serverTime+=200;await c.tick();assert.equal(scene.tiles.get("t1").rotation,0);
+ game.paused=false;
+ for(let i=0;i<50;i++){game.time.serverTime+=200;await c.tick();}
+ assert.ok(Math.abs(scene.tiles.get("t1").rotation-5)<.00001);
+});
+test("Start reports an existing engine failure instead of silently arming a stopped engine",async()=>{
+ const {c,scene,state}=setup();state.slots[0].running=false;c.failure=true;c.lastError="Update denied";
+ await assert.rejects(()=>c.control(scene,"a","start"),/Update denied.*Resume engine/);assert.equal(state.slots[0].running,false);
+});

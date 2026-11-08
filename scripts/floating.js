@@ -23,10 +23,11 @@ export function createFloatingClass(controller, openSettings) {
     }
     getData() {
       const scene = canvas.scene;
-      return {sceneName: scene?.name, enabled: controller.enabled(scene), failed: controller.failure,
+      return {sceneName: scene?.name, enabled: controller.enabled(scene), failed: controller.failure, lastError: controller.lastError, gamePaused: !!game.paused,
         isController: controller.authority(scene)?.id === game.user.id,
         slots: controller.state(scene).slots.map(s => ({...s, label: s.id.toUpperCase(),
           assigned: !!scene?.tiles.get(s.tileId),
+          status: controller.failure ? "Engine stopped" : !s.running ? "Paused" : game.paused ? "Waiting for unpause" : "Running",
           imageName: (scene?.tiles.get(s.tileId)?.texture.src ?? "Choose a tile in settings").split("/").pop(),
           directionText: s.direction === 1 ? "Clockwise" : "Counterclockwise",
           toggle: s.running ? "pause" : "start", toggleText: s.running ? "Pause" : "Start"
@@ -60,7 +61,7 @@ export function createFloatingClass(controller, openSettings) {
           }
           else if (action === "pauseAll") {
             for (const s of controller.slots(scene)) await controller.control(scene, s.id, "pause");
-          } else if (action === "resume") { controller.failure = false; controller.last = 0; }
+          } else if (action === "resume") { controller.failure = false; controller.lastError = ""; controller.last = 0; }
           else await controller.control(scene, slot, action);
         } catch (error) { ui.notifications.error(error.message); }
         finally { button.disabled = false; if (action !== "target") this.render(false); }

@@ -50,19 +50,38 @@ export function matchingMaskPaths(imagePath) {
   const extensions = [...new Set(["png", ...(["webp", "jpg", "jpeg"].includes(extension) ? [extension] : [])])];
   return extensions.flatMap(ext => [`${base}_mask.${ext}${suffix}`, `${base}_Mask.${ext}${suffix}`]);
 }
-export function imageExists(path) {
-  return new Promise(resolve => {
-    const image = new Image();
-    let done = false;
-    const finish = value => { if (done) return; done = true; clearTimeout(timer); image.onload = image.onerror = null; resolve(value); };
-    const timer = setTimeout(() => finish(false), 4000);
-    image.onload = () => finish(true); image.onerror = () => finish(false); image.src = path;
+/** Ask the configured storage provider for existing files; never GET guessed URLs. */
+export async function listMaskFiles(imagePath) {
+  const picker = new FilePicker({type: "image", current: imagePath});
+  const source = picker.activeSource;
+  const target = picker.target;
+  if (!source || target == null) return [];
+  const result = await FilePicker.browse(source, target, {
+    extensions: [".png", ".webp", ".jpg", ".jpeg"],
+    ...(source === "s3" ? {bucket: picker.sources.s3.bucket} : {})
   });
+  return result?.files ?? [];
 }
-export async function findMatchingMask(imagePath, probe = imageExists) {
+function pathKey(path) {
+  // Storage providers can return encoded or decoded filenames. Decode components
+  // individually so an escaped slash cannot change the directory being matched.
+  return String(path).split(/[?#]/)[0].split("/").map(part => {
+    try { return decodeURIComponent(part); } catch { return part; }
+  }).map(part => encodeURIComponent(part)).join("/");
+}
+export async function findMatchingMask(imagePath, listFiles = listMaskFiles) {
   const paths = matchingMaskPaths(imagePath);
-  const results = await Promise.all(paths.map(path => probe(path)));
-  return paths.find((path, i) => results[i]) ?? "";
+  if (!paths.length) return "";
+  try {
+    const files = await listFiles(imagePath);
+    for (const candidate of paths) {
+      const match = files.find(file => pathKey(file) === pathKey(candidate));
+      if (match) return match;
+    }
+  } catch (error) {
+    console.debug("rotating-dungeon | Mask folder lookup unavailable; use Browse / Upload.", error);
+  }
+  return "";
 }
 /** Alpha-based coverage makes transparent gaps in overlapping ring tiles non-floor. */
 export async function readFloor(path) {

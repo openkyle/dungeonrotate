@@ -34,8 +34,15 @@ Hooks.once("ready", () => {
     open: () => { if (game.user.isGM) new Panel().render(true); },
     openControls: () => syncFloating(true),
     state: () => controller.state(),
+    diagnostics: () => ({version: game.modules.get(ID).version, paused: game.paused,
+      enabled: controller.enabled(), canvasReady: canvas.ready, engineStopped: controller.stopped,
+      failed: controller.failure, error: controller.lastError, controllingGM: controller.authority()?.id ?? null,
+      currentUser: game.user.id, lastTick: controller.last, serverTime: game.time.serverTime,
+      slots: controller.slots(canvas.scene).map(s => ({id:s.id, running:s.running, speed:s.speed,
+        rotation:canvas.scene.tiles.get(s.tileId).rotation, motion:canvas.scene.tiles.get(s.tileId).getFlag(ID,"motion")}))}),
     control: (slot, action) => controller.control(canvas.scene, slot, action)
   };
+  controller.onStatusChange = () => syncFloating(false);
   controller.start();
   attachTicker(); syncFloating(true);
 });
@@ -43,6 +50,7 @@ Hooks.on("canvasReady", () => { controller.last = 0; controller.owner = null; at
 Hooks.on("canvasTearDown", () => { controller.last = 0; controller.owner = null; floating?.close(); });
 Hooks.on("renderSceneConfig", addSceneToggle);
 Hooks.on("updateScene", scene => { if (scene.id === canvas.scene?.id) syncFloating(true); });
+Hooks.on("pauseGame", () => { controller.last = 0; syncFloating(false); });
 Hooks.on("userConnected", () => syncFloating(false));
 Hooks.on("getSceneControlButtons", controls => {
   if (!game.user.isGM) return;

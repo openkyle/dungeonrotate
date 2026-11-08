@@ -7,10 +7,10 @@ test("mask convention replaces image extension and preserves directory and encod
  assert.deepEqual(matchingMaskPaths("maps/Dungeon.png"),["maps/Dungeon_mask.png","maps/Dungeon_Mask.png"]);
 });
 test("matching mask prefers lowercase, accepts uppercase suffix, and handles missing files",async()=>{
- assert.equal(await findMatchingMask("maps/Dungeon.webp",async p=>p.includes("_Mask")),"maps/Dungeon_Mask.png");
- assert.equal(await findMatchingMask("maps/Dungeon.webp",async()=>true),"maps/Dungeon_mask.png");
- assert.equal(await findMatchingMask("maps/Dungeon.webp",async()=>false),"");
- assert.equal(await findMatchingMask(null,async()=>true),"");
+ assert.equal(await findMatchingMask("maps/Dungeon.webp",async()=>["maps/Dungeon_Mask.png"]),"maps/Dungeon_Mask.png");
+ assert.equal(await findMatchingMask("maps/Dungeon.webp",async()=>["maps/Dungeon_Mask.png","maps/Dungeon_mask.png"]),"maps/Dungeon_mask.png");
+ assert.equal(await findMatchingMask("maps/Dungeon.webp",async()=>[]),"");
+ assert.equal(await findMatchingMask(null,async()=>["maps/Dungeon_Mask.png","maps/Dungeon_mask.png"]),"");
 });
 function setup() {
  let id=0;const hooks=new Map(),keys=new Map(),calls=[];
@@ -40,5 +40,21 @@ test("a second target session cancels the first and leaves only one active selec
 });
 
 test("automatic discovery accepts WebP masks matching WebP artwork",async()=>{
- assert.equal(await findMatchingMask("maps/Ring.webp",async path=>path==="maps/Ring_Mask.webp"),"maps/Ring_Mask.webp");
+ assert.equal(await findMatchingMask("maps/Ring.webp",async()=>["maps/Ring_Mask.webp"]),"maps/Ring_Mask.webp");
+});
+
+test("mask lookup compares encoded paths and ignores unrelated directories",async()=>{
+ assert.equal(await findMatchingMask("maps/Ring%201%263.webp?v=2",async()=>["other/Ring 1&3_mask.png","maps/Ring 1&3_Mask.webp"]),"maps/Ring 1&3_Mask.webp");
+});
+test("directory lookup failure is optional and never falls back to image probes",async()=>{
+ globalThis.Image=class {constructor(){throw Error("Must not probe an image");}};
+ assert.equal(await findMatchingMask("maps/Ring.webp",async()=>{throw Error("No browse access");}),"");
+});
+test("native file picker browses the inferred storage directory once without opening a window",async()=>{
+ let calls=0;
+ globalThis.FilePicker=class {
+  constructor(options){assert.equal(options.current,"https://assets.example.test/library/Ring.webp");this.activeSource="forgevtt";this.target="library";}
+  static async browse(source,target){calls++;assert.equal(source,"forgevtt");assert.equal(target,"library");return {files:["https://assets.example.test/library/Ring_Mask.webp"]};}
+ };
+ assert.equal(await findMatchingMask("https://assets.example.test/library/Ring.webp"),"https://assets.example.test/library/Ring_Mask.webp");assert.equal(calls,1);
 });

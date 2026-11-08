@@ -7,7 +7,7 @@ export class RotationController {
   constructor() {
     this.queue = Promise.resolve(); this.last = 0; this.owner = null; this.timer = null;
     this.readMask = readMask; this.readFloor = readFloor;
-    this.failure = false; this.stopped = true;
+    this.failure = false; this.lastError = ""; this.stopped = true;
   }
   enabled(scene = canvas.scene) { return scene?.getFlag(ID, "enabled") === true; }
   state(scene = canvas.scene) { return clone(scene?.getFlag(ID, "state") ?? defaultState()); }
@@ -31,7 +31,8 @@ export class RotationController {
       try { await this.serial(() => this.tick()); }
       catch (error) {
         console.error(ID, error);
-        this.failure = true;
+        this.failure = true; this.lastError = error.message;
+        this.onStatusChange?.();
         ui.notifications.error(`Rotating Dungeon stopped: ${error.message}. Fix the issue, then use Resume engine in the panel.`);
       }
       if (!this.stopped) this.timer = setTimeout(loop, 50);
@@ -280,7 +281,8 @@ export class RotationController {
           const ids = created.filter(w => scene.walls.has(w.id)).map(w => w.id);
           if (ids.length) await scene.deleteEmbeddedDocuments("Wall", ids, {[ID]: true});
         } catch (rollbackError) {
-          this.failure = true;
+          this.failure = true; this.lastError = error.message;
+        this.onStatusChange?.();
           console.error(ID, "Could not restore previous wall configuration", rollbackError);
           throw Error(`${error.message} Automatic restoration failed; engine stopped. Restore the scene backup before resuming.`);
         }
@@ -306,6 +308,7 @@ export class RotationController {
       const state = this.state(scene), s = state.slots.find(s => s.id === slotId), tile = scene.tiles.get(s?.tileId);
       if (!tile) throw Error("Select and save a tile first.");
       if (action === "start") {
+        if (this.failure) throw Error(`Engine stopped: ${this.lastError || "previous update failed"}. Use Resume engine first.`);
         if (!this.enabled(scene)) throw Error('Enable "This scene has Rotating Elements" in Scene Configuration first.');
         validateState(state, scene.tiles);
         if (s.maskPath && (s.vision || s.collision) && (!s.mask || !scene.walls.some(w => w.getFlag(ID, "wall")?.slotId === slotId))) throw Error("Choose a wall mask and save settings first, or disable vision and collision in Advanced settings.");
@@ -316,6 +319,7 @@ export class RotationController {
       await scene.setFlag(ID, "state", state);
       await tile.update({[`flags.${ID}.motion`]: {angle: tile.rotation, velocity: s.running && !game.paused ? s.speed * s.direction : 0, at: game.time.serverTime}}, {[ID]: true});
       this.last = game.time.serverTime;
+      if (action === "start" && game.paused) ui.notifications.warn("Rotation is armed, but Foundry is paused. Press Space to unpause the game and begin rotation.");
     });
   }
   async generate(scene, slotId) {
